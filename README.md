@@ -1,2 +1,59 @@
 # SEO-Automation
-This would be my all in one SEO &amp; GEO dashboard from where I would control everything.
+
+AI Technical SEO Crawler & Audit Agent — an internal tool that crawls each
+clinic client's site, tracks technical health over time, and drafts
+client-friendly before/after reports so completed work stays visible.
+
+Built per the [AI Technical SEO Crawler & Audit Agent PRD](./docs) (Next.js
+14 App Router, Supabase, Anthropic Claude, Google Workspace delivery).
+
+## Stack
+
+- **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
+- **Backend:** Supabase (Postgres, Auth, Storage, Edge Functions)
+- **Crawl engine:** Screaming Frog SEO Spider CLI (export ingestion)
+- **Core Web Vitals:** PageSpeed Insights / CrUX API
+- **Report drafting:** Anthropic Claude API
+- **Delivery:** Gmail API + Google Drive API
+- **Hosting:** Vercel (Cron for the monthly audit cycle)
+
+## Getting started
+
+```bash
+npm install
+cp .env.example .env.local   # fill in Supabase / API credentials
+npm run dev
+```
+
+### Supabase setup
+
+1. Link this repo to a Supabase project: `supabase link --project-ref <ref>`
+2. Apply the schema: `supabase db push` (or `supabase migration up` locally)
+3. Deploy the Edge Functions: `supabase functions deploy run-crawl generate-report send-report alert-check`
+4. Set Edge Function secrets (`supabase secrets set`) for `ANTHROPIC_API_KEY`,
+   `PAGESPEED_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+   `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DRIVE_REPORTS_FOLDER_ID`, `ALERT_WEBHOOK_URL`.
+5. Regenerate `lib/supabase/database.types.ts` from the linked project:
+   `supabase gen types typescript --linked > lib/supabase/database.types.ts`
+
+### Screaming Frog
+
+The CLI needs a licensed, non-serverless machine to run headlessly (see
+`lib/screamingfrog.ts` → `runScreamingFrogCrawl`). Until that runner is wired
+up to call `run-crawl` with a CSV export, "Run crawl now" still captures
+Core Web Vitals via PageSpeed Insights so audits aren't empty.
+
+## Project structure
+
+See `supabase/migrations/0001_init.sql` for the schema (`clients`, `audits`,
+`issues`, `metric_snapshots`, `reports`) and `supabase/functions/` for the
+crawl/report/delivery/alert Edge Functions. App routes live under
+`app/(dashboard)/`; shared UI is in `components/crawler/` and `components/ui/`.
+
+## MVP status
+
+Implements the roster, audit ingest, issue tracking with before/after
+screenshots, Claude-drafted reports with human approve/send, and the
+agency-wide coverage overview described in the PRD. CMS auto-remediation,
+the Content/Authority pillars, and GBP posting are explicitly out of scope
+for this phase.
