@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapClient, mapReport } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ReportDraftEditor } from "@/components/crawler/ReportDraftEditor";
@@ -12,6 +13,8 @@ export default async function ReportPage({
 }: {
   params: { clientId: string; reportId: string };
 }) {
+  if (!isSupabaseConfigured) redirect("/");
+
   const supabase = createClient();
 
   const [{ data: clientRow }, { data: reportRow }] = await Promise.all([

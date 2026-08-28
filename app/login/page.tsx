@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { SupabaseSetupNotice } from "@/components/crawler/SupabaseSetupNotice";
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage() {
+  if (!isSupabaseConfigured) {
+    return <SupabaseSetupNotice />;
+  }
+
   const supabase = createClient();
   const {
     data: { user },

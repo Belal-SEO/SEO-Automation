@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { SupabaseSetupNotice } from "@/components/crawler/SupabaseSetupNotice";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  if (!isSupabaseConfigured) {
+    return <SupabaseSetupNotice />;
+  }
+
   const supabase = createClient();
   const {
     data: { user },

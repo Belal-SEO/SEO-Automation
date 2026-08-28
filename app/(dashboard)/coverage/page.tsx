@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { fetchClientRoster } from "@/lib/queries";
 import { CoverageOverview } from "@/components/crawler/CoverageOverview";
 import { EmptyState } from "@/components/crawler/EmptyState";
@@ -6,6 +8,8 @@ import { EmptyState } from "@/components/crawler/EmptyState";
 export const dynamic = "force-dynamic";
 
 export default async function CoveragePage() {
+  if (!isSupabaseConfigured) redirect("/");
+
   const supabase = createClient();
   const roster = await fetchClientRoster(supabase);
 

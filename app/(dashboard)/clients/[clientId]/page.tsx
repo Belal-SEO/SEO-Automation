@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapAudit, mapClient, mapIssue, mapMetricSnapshot, mapReport } from "@/lib/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AuditTriggerButton } from "@/components/crawler/AuditTriggerButton";
@@ -16,6 +17,8 @@ import { formatDate } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function ClientDetailPage({ params }: { params: { clientId: string } }) {
+  if (!isSupabaseConfigured) redirect("/");
+
   const supabase = createClient();
 
   const { data: clientRow } = await supabase

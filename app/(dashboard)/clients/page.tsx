@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { fetchClientRoster } from "@/lib/queries";
 import { ClientRosterTable } from "@/components/crawler/ClientRosterTable";
 import { ClientForm } from "@/components/crawler/ClientForm";
@@ -8,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
+  if (!isSupabaseConfigured) redirect("/");
+
   const supabase = createClient();
   const roster = await fetchClientRoster(supabase);
 
