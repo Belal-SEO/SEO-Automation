@@ -11,6 +11,7 @@ import { IssueTable } from "@/components/crawler/IssueTable";
 import { CWVTrendChart } from "@/components/crawler/CWVTrendChart";
 import { BeforeAfterGallery } from "@/components/crawler/BeforeAfterGallery";
 import { NotificationSettings } from "@/components/crawler/NotificationSettings";
+import { AuditInstructionsSettings } from "@/components/crawler/AuditInstructionsSettings";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { formatDate } from "@/lib/utils";
 
@@ -141,6 +142,15 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Audit instructions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AuditInstructionsSettings client={client} />
         </CardContent>
       </Card>
 

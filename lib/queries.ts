@@ -21,6 +21,7 @@ export function mapClient(row: Row<"clients">): Client {
     cmsType: row.cms_type as Client["cmsType"],
     reportCadenceDays: row.report_cadence_days,
     criticalAlertThreshold: row.critical_alert_threshold,
+    customAuditInstructions: row.custom_audit_instructions,
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

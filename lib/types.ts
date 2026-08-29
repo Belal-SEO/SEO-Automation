@@ -9,6 +9,7 @@ export interface Client {
   cmsType: CmsType;
   reportCadenceDays: number;
   criticalAlertThreshold: number;
+  customAuditInstructions: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -31,7 +32,8 @@ export type IssueCategory =
   | "broken_link"
   | "page_structure"
   | "indexability"
-  | "meta";
+  | "meta"
+  | "local_seo";
 
 export type IssueSeverity = "critical" | "high" | "medium" | "low";
 export type IssueStatus = "open" | "in_progress" | "fixed";
@@ -84,6 +86,7 @@ export const ISSUE_CATEGORY_LABELS: Record<IssueCategory, string> = {
   page_structure: "Page Structure",
   indexability: "Indexability",
   meta: "Meta Tags",
+  local_seo: "Local SEO",
 };
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = {

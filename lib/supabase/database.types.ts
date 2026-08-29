@@ -15,6 +15,7 @@ export interface Database {
           cms_type: string | null;
           report_cadence_days: number;
           critical_alert_threshold: number;
+          custom_audit_instructions: string | null;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -28,6 +29,7 @@ export interface Database {
           cms_type?: string | null;
           report_cadence_days?: number;
           critical_alert_threshold?: number;
+          custom_audit_instructions?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
