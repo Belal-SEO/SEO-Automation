@@ -4,7 +4,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { SupabaseSetupNotice } from "@/components/crawler/SupabaseSetupNotice";
 import { LoginForm } from "./login-form";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: { error?: string };
+}) {
   if (!isSupabaseConfigured) {
     return <SupabaseSetupNotice />;
   }
@@ -25,6 +29,11 @@ export default async function LoginPage() {
         <p className="mb-6 text-sm text-muted-foreground">
           Internal team access only. Sign in with your work email.
         </p>
+        {searchParams.error && (
+          <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {searchParams.error}
+          </p>
+        )}
         <LoginForm />
       </div>
     </div>

@@ -38,8 +38,7 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
 
   if (!user && !isAuthRoute) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
+    const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -48,6 +47,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
