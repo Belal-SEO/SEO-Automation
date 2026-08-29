@@ -78,6 +78,8 @@ export interface Database {
           fixed_at: string | null;
           before_screenshot_url: string | null;
           after_screenshot_url: string | null;
+          is_executable: boolean;
+          executable_added_at: string | null;
         };
         Insert: {
           id?: string;
@@ -92,6 +94,8 @@ export interface Database {
           fixed_at?: string | null;
           before_screenshot_url?: string | null;
           after_screenshot_url?: string | null;
+          is_executable?: boolean;
+          executable_added_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["issues"]["Insert"]>;
         Relationships: [
@@ -103,6 +107,41 @@ export interface Database {
           },
           {
             foreignKeyName: "issues_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      issue_activity: {
+        Row: {
+          id: string;
+          issue_id: string;
+          client_id: string;
+          activity_type: string;
+          note: string | null;
+          new_status: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          issue_id: string;
+          client_id: string;
+          activity_type: string;
+          note?: string | null;
+          new_status?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["issue_activity"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "issue_activity_issue_id_fkey";
+            columns: ["issue_id"];
+            referencedRelation: "issues";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "issue_activity_client_id_fkey";
             columns: ["client_id"];
             referencedRelation: "clients";
             referencedColumns: ["id"];

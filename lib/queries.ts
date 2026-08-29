@@ -5,6 +5,7 @@ import type {
   ClientRosterRow,
   Audit,
   Issue,
+  IssueActivity,
   MetricSnapshot,
   Report,
 } from "@/lib/types";
@@ -53,6 +54,20 @@ export function mapIssue(row: Row<"issues">): Issue {
     fixedAt: row.fixed_at,
     beforeScreenshotUrl: row.before_screenshot_url,
     afterScreenshotUrl: row.after_screenshot_url,
+    isExecutable: row.is_executable,
+    executableAddedAt: row.executable_added_at,
+  };
+}
+
+export function mapIssueActivity(row: Row<"issue_activity">): IssueActivity {
+  return {
+    id: row.id,
+    issueId: row.issue_id,
+    clientId: row.client_id,
+    activityType: row.activity_type as IssueActivity["activityType"],
+    note: row.note,
+    newStatus: row.new_status as IssueActivity["newStatus"],
+    createdAt: row.created_at,
   };
 }
 

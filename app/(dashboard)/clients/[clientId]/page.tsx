@@ -76,7 +76,13 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
             {client.name} · {client.domain} · {client.locations.join(", ") || "No locations set"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/clients/${client.id}/executables`}
+            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Executables
+          </Link>
           <GenerateReportButton clientId={client.id} />
           <AuditTriggerButton clientId={client.id} />
         </div>

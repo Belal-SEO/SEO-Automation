@@ -51,6 +51,20 @@ export interface Issue {
   fixedAt: string | null;
   beforeScreenshotUrl: string | null;
   afterScreenshotUrl: string | null;
+  isExecutable: boolean;
+  executableAddedAt: string | null;
+}
+
+export type IssueActivityType = "note" | "status_change" | "added_to_executables" | "removed_from_executables";
+
+export interface IssueActivity {
+  id: string;
+  issueId: string;
+  clientId: string;
+  activityType: IssueActivityType;
+  note: string | null;
+  newStatus: IssueStatus | null;
+  createdAt: string;
 }
 
 export type MetricName = "lcp" | "cls" | "inp" | "broken_link_count";
