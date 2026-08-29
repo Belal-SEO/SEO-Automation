@@ -14,7 +14,7 @@ export interface Client {
   updatedAt: string;
 }
 
-export type AuditSource = "screaming_frog" | "psi" | "manual";
+export type AuditSource = "ai_crawl" | "psi" | "manual";
 export type AuditStatus = "queued" | "crawling" | "analyzing" | "complete" | "failed";
 
 export interface Audit {

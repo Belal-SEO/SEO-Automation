@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   for (const client of clients ?? []) {
     const { data: audit, error: auditError } = await supabase
       .from("audits")
-      .insert({ client_id: client.id, source: "screaming_frog", status: "queued" })
+      .insert({ client_id: client.id, source: "ai_crawl", status: "queued" })
       .select("id")
       .single();
 

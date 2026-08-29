@@ -7,8 +7,9 @@ const bodySchema = z.object({ clientId: z.string().uuid() });
 /**
  * Triggers a technical crawl for a client. Creates the Audit row and hands
  * off to the `run-crawl` Supabase Edge Function, which does the actual work
- * (PSI fetch + Screaming Frog export ingestion) and can run longer than a
- * Vercel serverless function's timeout allows.
+ * (self-fetches a handful of same-domain pages, has Claude identify issues,
+ * pulls PSI Core Web Vitals) and can run longer than a Vercel serverless
+ * function's timeout allows.
  */
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
 
   const { data: audit, error: auditError } = await supabase
     .from("audits")
-    .insert({ client_id: client.id, source: "screaming_frog", status: "queued" })
+    .insert({ client_id: client.id, source: "ai_crawl", status: "queued" })
     .select("id")
     .single();
 
