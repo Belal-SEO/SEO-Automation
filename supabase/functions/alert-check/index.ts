@@ -5,7 +5,11 @@
 // configured threshold is met, posts to ALERT_WEBHOOK_URL (e.g. a Slack
 // incoming webhook) so the specialist finds out before the client does.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

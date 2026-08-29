@@ -4,7 +4,8 @@
 -- Claude identify issues directly.
 
 alter table public.audits drop constraint audits_source_check;
-alter table public.audits add constraint audits_source_check
-  check (source in ('ai_crawl', 'psi', 'manual'));
 
 update public.audits set source = 'ai_crawl' where source = 'screaming_frog';
+
+alter table public.audits add constraint audits_source_check
+  check (source in ('ai_crawl', 'psi', 'manual'));
