@@ -216,6 +216,189 @@ export interface Database {
           },
         ];
       };
+      monthly_report_settings: {
+        Row: {
+          client_id: string;
+          agency_label: string | null;
+          website_url: string | null;
+          client_email: string | null;
+          gsc_site_url: string | null;
+          send_day_of_month: number;
+          review_lead_days: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          client_id: string;
+          agency_label?: string | null;
+          website_url?: string | null;
+          client_email?: string | null;
+          gsc_site_url?: string | null;
+          send_day_of_month?: number;
+          review_lead_days?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["monthly_report_settings"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "monthly_report_settings_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      baselines: {
+        Row: {
+          id: string;
+          client_id: string;
+          organic_impressions: number;
+          organic_clicks: number;
+          indexed_pages: number;
+          total_backlinks: number;
+          captured_range_start: string | null;
+          captured_range_end: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          organic_impressions?: number;
+          organic_clicks?: number;
+          indexed_pages?: number;
+          total_backlinks?: number;
+          captured_range_start?: string | null;
+          captured_range_end?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["baselines"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "baselines_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      monthly_reports: {
+        Row: {
+          id: string;
+          client_id: string;
+          period_label: string;
+          title: string;
+          subtitle: string | null;
+          accent_color: string;
+          period_start: string;
+          period_end: string;
+          scheduled_send_date: string;
+          status: string;
+          sort_index: number;
+          generated_at: string | null;
+          sent_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          period_label: string;
+          title?: string;
+          subtitle?: string | null;
+          accent_color?: string;
+          period_start: string;
+          period_end: string;
+          scheduled_send_date: string;
+          status?: string;
+          sort_index?: number;
+          generated_at?: string | null;
+          sent_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["monthly_reports"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "monthly_reports_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      monthly_report_metrics: {
+        Row: {
+          id: string;
+          monthly_report_id: string;
+          key: string;
+          label: string;
+          sublabel: string | null;
+          value_number: number | null;
+          value_text: string | null;
+          source: string;
+          auto_value: number | null;
+          is_overridden: boolean;
+          fetched_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          monthly_report_id: string;
+          key: string;
+          label: string;
+          sublabel?: string | null;
+          value_number?: number | null;
+          value_text?: string | null;
+          source?: string;
+          auto_value?: number | null;
+          is_overridden?: boolean;
+          fetched_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["monthly_report_metrics"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "monthly_report_metrics_report_id_fkey";
+            columns: ["monthly_report_id"];
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      monthly_report_tasks: {
+        Row: {
+          id: string;
+          monthly_report_id: string;
+          list_key: string;
+          text: string;
+          url: string | null;
+          sort_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          monthly_report_id: string;
+          list_key: string;
+          text: string;
+          url?: string | null;
+          sort_index?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["monthly_report_tasks"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "monthly_report_tasks_report_id_fkey";
+            columns: ["monthly_report_id"];
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

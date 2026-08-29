@@ -83,6 +83,12 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           >
             Executables
           </Link>
+          <Link
+            href={`/clients/${client.id}/monthly-reports`}
+            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Monthly Reports
+          </Link>
           <GenerateReportButton clientId={client.id} />
           <AuditTriggerButton clientId={client.id} />
         </div>

@@ -15,7 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border">
+      <header className="border-b border-border print:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <nav className="flex items-center gap-6 text-sm">
             <Link href="/clients" className="font-semibold">
@@ -26,6 +26,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
             <Link href="/coverage" className="text-muted-foreground hover:text-foreground">
               Coverage
+            </Link>
+            <Link href="/monthly-reports" className="text-muted-foreground hover:text-foreground">
+              Monthly Reports
             </Link>
           </nav>
           {user && <span className="text-xs text-muted-foreground">{user.email}</span>}

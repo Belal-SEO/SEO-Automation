@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import type { Client, Report } from "@/lib/types";
 
-function getOAuthClient() {
+export function getOAuthClient() {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_REFRESH_TOKEN } =
     process.env;
 
