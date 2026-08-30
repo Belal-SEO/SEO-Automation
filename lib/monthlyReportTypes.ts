@@ -8,6 +8,9 @@ export interface MonthlyReportSettings {
   websiteUrl: string | null;
   clientEmail: string | null;
   gscSiteUrl: string | null;
+  backlinksSheetId: string | null;
+  backlinksSheetTab: string | null;
+  gbpLocationId: string | null;
   sendDayOfMonth: number;
   reviewLeadDays: number;
   createdAt: string;
@@ -43,6 +46,7 @@ export interface MonthlyReport {
   sortIndex: number;
   generatedAt: string | null;
   sentAt: string | null;
+  reminderSentAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,14 +91,28 @@ export type MonthlyTaskListKey =
   | "cro"
   | "notes";
 
+export type TaskSource = "manual" | "sheet";
+
 export interface MonthlyReportTask {
   id: string;
   monthlyReportId: string;
   listKey: MonthlyTaskListKey;
   text: string;
   url: string | null;
+  source: TaskSource;
   sortIndex: number;
   createdAt: string;
+}
+
+export interface MonthlyReportEmailDraft {
+  id: string;
+  monthlyReportId: string;
+  toEmail: string | null;
+  subject: string;
+  body: string;
+  status: "draft" | "approved";
+  generatedAt: string;
+  updatedAt: string;
 }
 
 export const METRIC_LABELS: Record<MonthlyMetricKey, { label: string; sublabel: string }> = {
@@ -111,11 +129,14 @@ export const METRIC_LABELS: Record<MonthlyMetricKey, { label: string; sublabel: 
   good_leads: { label: "Good Leads", sublabel: "Qualified this period" },
 };
 
-// Metrics we can live-pull in this MVP; everything else is manual until
-// Phase 2 (Sheets for backlinks, GBP API for posts).
+// Metrics we can live-pull. backlinks_built/gbp_posts only actually populate
+// once the client has a Sheet/GBP location configured in settings -- see
+// AUTO_CAPABLE_METRICS usage in NewMonthlyReportForm, which checks that too.
 export const AUTO_CAPABLE_METRICS: Partial<Record<MonthlyMetricKey, MetricSource>> = {
   impressions: "gsc",
   clicks: "gsc",
+  backlinks_built: "sheet",
+  gbp_posts: "gbp",
 };
 
 export const TASK_LIST_LABELS: Record<MonthlyTaskListKey, string> = {

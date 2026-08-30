@@ -19,6 +19,9 @@ export function MonthlyReportSettingsForm({
   const [websiteUrl, setWebsiteUrl] = useState(settings?.websiteUrl ?? "");
   const [clientEmail, setClientEmail] = useState(settings?.clientEmail ?? "");
   const [gscSiteUrl, setGscSiteUrl] = useState(settings?.gscSiteUrl ?? "");
+  const [backlinksSheetId, setBacklinksSheetId] = useState(settings?.backlinksSheetId ?? "");
+  const [backlinksSheetTab, setBacklinksSheetTab] = useState(settings?.backlinksSheetTab ?? "");
+  const [gbpLocationId, setGbpLocationId] = useState(settings?.gbpLocationId ?? "");
   const [sendDayOfMonth, setSendDayOfMonth] = useState(settings?.sendDayOfMonth ?? 5);
   const [reviewLeadDays, setReviewLeadDays] = useState(settings?.reviewLeadDays ?? 3);
   const [saving, setSaving] = useState(false);
@@ -32,6 +35,9 @@ export function MonthlyReportSettingsForm({
       website_url: websiteUrl.trim() || null,
       client_email: clientEmail.trim() || null,
       gsc_site_url: gscSiteUrl.trim() || null,
+      backlinks_sheet_id: backlinksSheetId.trim() || null,
+      backlinks_sheet_tab: backlinksSheetTab.trim() || null,
+      gbp_location_id: gbpLocationId.trim() || null,
       send_day_of_month: sendDayOfMonth,
       review_lead_days: reviewLeadDays,
     });
@@ -71,6 +77,34 @@ export function MonthlyReportSettingsForm({
             value={gscSiteUrl}
             onChange={(e) => setGscSiteUrl(e.target.value)}
             placeholder="sc-domain:example.com"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            Backlinks Sheet ID <span className="text-muted-foreground">(optional)</span>
+          </label>
+          <Input
+            value={backlinksSheetId}
+            onChange={(e) => setBacklinksSheetId(e.target.value)}
+            placeholder="1Ax...the long ID in the Sheet's URL"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Backlinks Sheet tab name</label>
+          <Input
+            value={backlinksSheetTab}
+            onChange={(e) => setBacklinksSheetTab(e.target.value)}
+            placeholder="Backlinks"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            GBP location ID <span className="text-muted-foreground">(optional — needs Google&apos;s GBP API approval)</span>
+          </label>
+          <Input
+            value={gbpLocationId}
+            onChange={(e) => setGbpLocationId(e.target.value)}
+            placeholder="accounts/123/locations/456"
           />
         </div>
         <div className="space-y-1">

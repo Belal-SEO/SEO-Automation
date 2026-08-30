@@ -61,6 +61,23 @@ function buildMimeMessage(to: string, subject: string, html: string): string {
     .replace(/=+$/, "");
 }
 
+/** Generic Gmail send, for anything that isn't a Technical Audit report (e.g. operator reminders). */
+export async function sendPlainEmail(to: string, subject: string, html: string): Promise<{ messageId: string }> {
+  const auth = getOAuthClient();
+  const gmail = google.gmail({ version: "v1", auth });
+  const raw = buildMimeMessage(to, subject, html);
+
+  const res = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw },
+  });
+
+  if (!res.data.id) {
+    throw new Error("Gmail API did not return a message id.");
+  }
+  return { messageId: res.data.id };
+}
+
 export async function sendReportEmail(
   client: Client,
   report: Report,

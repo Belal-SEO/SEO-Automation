@@ -79,6 +79,8 @@ export default async function ClientMonthlyReportsPage({ params }: { params: { c
             clientId={client.id}
             sendDayOfMonth={settings?.sendDayOfMonth ?? 5}
             gscConfigured={Boolean(settings?.gscSiteUrl)}
+            sheetConfigured={Boolean(settings?.backlinksSheetId && settings?.backlinksSheetTab)}
+            gbpConfigured={Boolean(settings?.gbpLocationId)}
           />
         </CardContent>
       </Card>

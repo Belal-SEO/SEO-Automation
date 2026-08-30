@@ -223,6 +223,9 @@ export interface Database {
           website_url: string | null;
           client_email: string | null;
           gsc_site_url: string | null;
+          backlinks_sheet_id: string | null;
+          backlinks_sheet_tab: string | null;
+          gbp_location_id: string | null;
           send_day_of_month: number;
           review_lead_days: number;
           created_at: string;
@@ -234,6 +237,9 @@ export interface Database {
           website_url?: string | null;
           client_email?: string | null;
           gsc_site_url?: string | null;
+          backlinks_sheet_id?: string | null;
+          backlinks_sheet_tab?: string | null;
+          gbp_location_id?: string | null;
           send_day_of_month?: number;
           review_lead_days?: number;
           created_at?: string;
@@ -299,6 +305,7 @@ export interface Database {
           sort_index: number;
           generated_at: string | null;
           sent_at: string | null;
+          reminder_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -316,6 +323,7 @@ export interface Database {
           sort_index?: number;
           generated_at?: string | null;
           sent_at?: string | null;
+          reminder_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -377,6 +385,7 @@ export interface Database {
           list_key: string;
           text: string;
           url: string | null;
+          source: string;
           sort_index: number;
           created_at: string;
         };
@@ -386,6 +395,7 @@ export interface Database {
           list_key: string;
           text: string;
           url?: string | null;
+          source?: string;
           sort_index?: number;
           created_at?: string;
         };
@@ -393,6 +403,37 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "monthly_report_tasks_report_id_fkey";
+            columns: ["monthly_report_id"];
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      monthly_report_email_drafts: {
+        Row: {
+          id: string;
+          monthly_report_id: string;
+          to_email: string | null;
+          subject: string;
+          body: string;
+          status: string;
+          generated_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          monthly_report_id: string;
+          to_email?: string | null;
+          subject?: string;
+          body?: string;
+          status?: string;
+          generated_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["monthly_report_email_drafts"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "monthly_report_email_drafts_report_id_fkey";
             columns: ["monthly_report_id"];
             referencedRelation: "monthly_reports";
             referencedColumns: ["id"];

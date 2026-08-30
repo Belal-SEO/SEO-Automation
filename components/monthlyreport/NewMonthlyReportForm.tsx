@@ -6,16 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { computeScheduledSendDate } from "@/lib/monthlyReportDerive";
-import { AUTO_CAPABLE_METRICS, METRIC_LABELS, type MonthlyMetricKey } from "@/lib/monthlyReportTypes";
+import { METRIC_LABELS, type MetricSource, type MonthlyMetricKey } from "@/lib/monthlyReportTypes";
 
 export function NewMonthlyReportForm({
   clientId,
   sendDayOfMonth,
   gscConfigured,
+  sheetConfigured,
+  gbpConfigured,
 }: {
   clientId: string;
   sendDayOfMonth: number;
   gscConfigured: boolean;
+  sheetConfigured: boolean;
+  gbpConfigured: boolean;
 }) {
   const router = useRouter();
   const today = new Date();
@@ -30,6 +34,13 @@ export function NewMonthlyReportForm({
   );
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const sourceForKey = (key: MonthlyMetricKey): MetricSource => {
+    if ((key === "impressions" || key === "clicks") && gscConfigured) return "gsc";
+    if (key === "backlinks_built" && sheetConfigured) return "sheet";
+    if (key === "gbp_posts" && gbpConfigured) return "gbp";
+    return "manual";
+  };
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -62,11 +73,11 @@ export function NewMonthlyReportForm({
         key,
         label: METRIC_LABELS[key].label,
         sublabel: METRIC_LABELS[key].sublabel,
-        source: gscConfigured && AUTO_CAPABLE_METRICS[key] ? AUTO_CAPABLE_METRICS[key] : "manual",
+        source: sourceForKey(key),
       })),
     );
 
-    if (gscConfigured) {
+    if (gscConfigured || sheetConfigured || gbpConfigured) {
       await fetch(`/api/monthly-reports/${report.id}/refresh`, { method: "POST" }).catch(() => {});
     }
 

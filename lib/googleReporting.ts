@@ -35,3 +35,113 @@ export async function fetchGscTotals(
     clicks: row?.clicks ?? 0,
   };
 }
+
+export interface BacklinkItem {
+  source: string;
+  target: string;
+}
+
+export interface SheetBacklinksResult {
+  count: number;
+  items: BacklinkItem[];
+}
+
+/**
+ * Reads the authority-building Sheet tab and returns rows created within the
+ * report period. Assumed column contract (row 1 = header, skipped):
+ *   A = Source URL, B = Target URL, C = Date Created (YYYY-MM-DD or any
+ *   Date.parse-able format).
+ * If column C is missing or unparseable for a row, that row is still
+ * counted (best-effort) rather than silently dropped -- adjust here if your
+ * sheet uses a different layout.
+ */
+export async function fetchSheetBacklinks(
+  sheetId: string,
+  tab: string,
+  startDate: string,
+  endDate: string,
+): Promise<SheetBacklinksResult> {
+  const auth = getOAuthClient();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `${tab}!A2:C`,
+  });
+
+  const rows = res.data.values ?? [];
+  const start = new Date(`${startDate}T00:00:00Z`).getTime();
+  const end = new Date(`${endDate}T23:59:59Z`).getTime();
+
+  const items: BacklinkItem[] = [];
+  for (const row of rows) {
+    const [source, target, dateCreated] = row;
+    if (!source || !target) continue;
+
+    if (dateCreated) {
+      const parsed = new Date(dateCreated).getTime();
+      if (!Number.isNaN(parsed) && (parsed < start || parsed > end)) continue;
+    }
+
+    items.push({ source, target });
+  }
+
+  return { count: items.length, items };
+}
+
+export interface GbpPostsResult {
+  count: number;
+}
+
+/**
+ * Counts Local Posts published in the report period for a GBP location.
+ * Uses the My Business API v4 (mybusiness.googleapis.com) -- still the only
+ * endpoint that exposes Local Posts even though other GBP resources moved
+ * to the newer split APIs. Requires the `business.manage` scope AND Google
+ * approval for API access on the connected account (see README); until
+ * that's granted this will throw and the caller falls back to manual entry.
+ */
+export async function fetchGbpPostCount(
+  locationId: string,
+  startDate: string,
+  endDate: string,
+): Promise<GbpPostsResult> {
+  const auth = getOAuthClient();
+  const accessToken = (await auth.getAccessToken()).token;
+  if (!accessToken) throw new Error("Could not obtain a Google access token.");
+
+  const start = new Date(`${startDate}T00:00:00Z`).getTime();
+  const end = new Date(`${endDate}T23:59:59Z`).getTime();
+
+  let count = 0;
+  let pageToken: string | undefined;
+
+  do {
+    const url = new URL(`https://mybusiness.googleapis.com/v4/${locationId}/localPosts`);
+    url.searchParams.set("pageSize", "100");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      throw new Error(`GBP Local Posts request failed (${res.status}): ${await res.text()}`);
+    }
+
+    const data = (await res.json()) as {
+      localPosts?: { createTime?: string }[];
+      nextPageToken?: string;
+    };
+
+    for (const post of data.localPosts ?? []) {
+      if (!post.createTime) continue;
+      const created = new Date(post.createTime).getTime();
+      if (created >= start && created <= end) count++;
+    }
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return { count };
+}

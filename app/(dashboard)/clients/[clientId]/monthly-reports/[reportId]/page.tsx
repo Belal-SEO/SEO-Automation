@@ -5,12 +5,13 @@ import { mapClient } from "@/lib/queries";
 import {
   mapBaseline,
   mapMonthlyReport,
+  mapMonthlyReportEmailDraft,
   mapMonthlyReportMetric,
   mapMonthlyReportTask,
 } from "@/lib/monthlyReportQueries";
 import { computeGrowthPct, computeWorkDeliveredTotal } from "@/lib/monthlyReportDerive";
 import { METRIC_LABELS, TASK_LIST_LABELS, type MonthlyMetricKey, type MonthlyTaskListKey } from "@/lib/monthlyReportTypes";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { HeroStats } from "@/components/monthlyreport/HeroStats";
 import { TrendChart, type TrendPoint } from "@/components/monthlyreport/TrendChart";
 import { MetricRow } from "@/components/monthlyreport/MetricRow";
@@ -18,6 +19,7 @@ import { DetailList } from "@/components/monthlyreport/DetailList";
 import { RefreshButton } from "@/components/monthlyreport/RefreshButton";
 import { PrintButton } from "@/components/monthlyreport/PrintButton";
 import { StatusControl } from "@/components/monthlyreport/StatusControl";
+import { DraftEmailPanel } from "@/components/monthlyreport/DraftEmailPanel";
 import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +56,7 @@ export default async function MonthlyReportEditorPage({
   const report = mapMonthlyReport(reportRow);
   const baseline = baselineRow ? mapBaseline(baselineRow) : null;
 
-  const [{ data: metricRows }, { data: taskRows }, { data: allReportRows }] = await Promise.all([
+  const [{ data: metricRows }, { data: taskRows }, { data: allReportRows }, { data: emailDraftRow }] = await Promise.all([
     supabase.from("monthly_report_metrics").select("*").eq("monthly_report_id", report.id),
     supabase.from("monthly_report_tasks").select("*").eq("monthly_report_id", report.id).order("sort_index"),
     supabase
@@ -62,10 +64,12 @@ export default async function MonthlyReportEditorPage({
       .select("id, period_label, period_start")
       .eq("client_id", client.id)
       .order("period_start", { ascending: true }),
+    supabase.from("monthly_report_email_drafts").select("*").eq("monthly_report_id", report.id).maybeSingle(),
   ]);
 
   const metrics = (metricRows ?? []).map(mapMonthlyReportMetric);
   const tasks = (taskRows ?? []).map(mapMonthlyReportTask);
+  const emailDraft = emailDraftRow ? mapMonthlyReportEmailDraft(emailDraftRow) : null;
   const metricByKey = new Map(metrics.map((m) => [m.key, m]));
 
   const otherReportIds = (allReportRows ?? []).map((r) => r.id);
@@ -163,6 +167,16 @@ export default async function MonthlyReportEditorPage({
           </Card>
         ))}
       </div>
+
+      <Card className="print:hidden">
+        <CardHeader>
+          <CardTitle>Draft client email</CardTitle>
+          <CardDescription>Grounded in this report&apos;s data. Review and approve before sending — nothing sends automatically.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DraftEmailPanel reportId={report.id} draft={emailDraft} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

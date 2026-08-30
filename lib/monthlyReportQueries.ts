@@ -3,6 +3,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import type {
   Baseline,
   MonthlyReport,
+  MonthlyReportEmailDraft,
   MonthlyReportMetric,
   MonthlyReportSettings,
   MonthlyReportStatus,
@@ -19,6 +20,9 @@ export function mapMonthlyReportSettings(row: Row<"monthly_report_settings">): M
     websiteUrl: row.website_url,
     clientEmail: row.client_email,
     gscSiteUrl: row.gsc_site_url,
+    backlinksSheetId: row.backlinks_sheet_id,
+    backlinksSheetTab: row.backlinks_sheet_tab,
+    gbpLocationId: row.gbp_location_id,
     sendDayOfMonth: row.send_day_of_month,
     reviewLeadDays: row.review_lead_days,
     createdAt: row.created_at,
@@ -56,6 +60,7 @@ export function mapMonthlyReport(row: Row<"monthly_reports">): MonthlyReport {
     sortIndex: row.sort_index,
     generatedAt: row.generated_at,
     sentAt: row.sent_at,
+    reminderSentAt: row.reminder_sent_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -86,8 +91,22 @@ export function mapMonthlyReportTask(row: Row<"monthly_report_tasks">): MonthlyR
     listKey: row.list_key as MonthlyReportTask["listKey"],
     text: row.text,
     url: row.url,
+    source: row.source as MonthlyReportTask["source"],
     sortIndex: row.sort_index,
     createdAt: row.created_at,
+  };
+}
+
+export function mapMonthlyReportEmailDraft(row: Row<"monthly_report_email_drafts">): MonthlyReportEmailDraft {
+  return {
+    id: row.id,
+    monthlyReportId: row.monthly_report_id,
+    toEmail: row.to_email,
+    subject: row.subject,
+    body: row.body,
+    status: row.status as MonthlyReportEmailDraft["status"],
+    generatedAt: row.generated_at,
+    updatedAt: row.updated_at,
   };
 }
 
