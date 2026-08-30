@@ -81,6 +81,7 @@ export default async function ClientMonthlyReportsPage({ params }: { params: { c
             gscConfigured={Boolean(settings?.gscSiteUrl)}
             sheetConfigured={Boolean(settings?.backlinksSheetId && settings?.backlinksSheetTab)}
             gbpConfigured={Boolean(settings?.gbpLocationId)}
+            existingReportCount={reports.length}
           />
         </CardContent>
       </Card>

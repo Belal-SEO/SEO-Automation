@@ -18,3 +18,8 @@ export function computeGrowthPct(current: number | null, baseline: number): numb
 export function computeWorkDeliveredTotal(tasks: MonthlyReportTask[]): number {
   return tasks.filter((t) => t.listKey !== "notes" && t.text.trim().length > 0).length;
 }
+
+/** Count of non-empty items in one task list -- powers the work strip. */
+export function countByListKey(tasks: MonthlyReportTask[], listKey: MonthlyReportTask["listKey"]): number {
+  return tasks.filter((t) => t.listKey === listKey && t.text.trim().length > 0).length;
+}

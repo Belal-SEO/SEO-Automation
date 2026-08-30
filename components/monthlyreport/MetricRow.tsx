@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SourceBadge } from "@/components/monthlyreport/SourceBadge";
 import { computeGrowthPct } from "@/lib/monthlyReportDerive";
+import { REPORT_COLORS as C } from "@/lib/reportTheme";
 import type { Database } from "@/lib/supabase/database.types";
 import type { MonthlyReportMetric } from "@/lib/monthlyReportTypes";
 
@@ -13,9 +14,11 @@ type MetricUpdate = Database["public"]["Tables"]["monthly_report_metrics"]["Upda
 export function MetricRow({
   metric,
   baselineValue,
+  accent,
 }: {
   metric: MonthlyReportMetric;
   baselineValue: number | null;
+  accent: string;
 }) {
   const router = useRouter();
   const isYesNo = metric.key === "gbp_optimised";
@@ -47,41 +50,72 @@ export function MetricRow({
     router.refresh();
   }
 
+  const up = growth != null && growth >= 0;
+  const fieldStyle: React.CSSProperties = {
+    width: "100%",
+    color: accent,
+    background: C.subtleBg,
+    border: `1px solid ${C.borderInput}`,
+    borderRadius: 7,
+    outline: "none",
+  };
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0">
-      <div>
-        <p className="text-sm font-medium">{metric.label}</p>
-        {metric.sublabel && <p className="text-xs text-muted-foreground">{metric.sublabel}</p>}
+    <div style={{ border: `1px solid ${C.borderCard}`, borderRadius: 10, padding: "14px 15px", position: "relative" }}>
+      <div
+        style={{
+          font: "600 9.5px/1.35 var(--font-dm-sans)",
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          color: C.muted,
+          marginBottom: 8,
+          minHeight: 26,
+        }}
+      >
+        {metric.label}
       </div>
-      <div className="flex items-center gap-3">
+      {isYesNo ? (
+        <select
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={handleSave}
+          disabled={saving}
+          style={{ ...fieldStyle, font: "600 15px/1 var(--font-dm-sans)", padding: "8px 9px", cursor: "pointer" }}
+        >
+          <option value="">— Select —</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      ) : (
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={handleSave}
+          disabled={saving}
+          placeholder="0"
+          style={{ ...fieldStyle, font: "600 21px/1 var(--font-dm-sans)", padding: "6px 9px" }}
+        />
+      )}
+      <div style={{ font: "400 10.5px/1.3 var(--font-dm-sans)", color: C.mutedLight, marginTop: 7 }}>{metric.sublabel}</div>
+      {growth != null && (
+        <span
+          style={{
+            display: "inline-block",
+            marginTop: 7,
+            font: "700 10.5px/1 var(--font-dm-sans)",
+            color: up ? C.badgeGreenText : C.badgeRedText,
+            background: up ? C.badgeGreenBg : C.badgeRedBg,
+            padding: "4px 8px",
+            borderRadius: 100,
+          }}
+        >
+          {up ? "▲ +" : "▼ "}
+          {Math.abs(growth).toFixed(0)}%
+        </span>
+      )}
+      <div className="print:hidden flex flex-wrap items-center gap-2" style={{ marginTop: 8 }}>
         <SourceBadge source={metric.source} isOverridden={metric.isOverridden} fetchedAt={metric.fetchedAt} />
-        {growth != null && (
-          <span className={growth >= 0 ? "text-xs font-medium text-emerald-600" : "text-xs font-medium text-red-600"}>
-            {growth >= 0 ? "▲" : "▼"} {Math.abs(growth).toFixed(1)}%
-          </span>
-        )}
-        {isYesNo ? (
-          <select
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onBlur={handleSave}
-            disabled={saving}
-            className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            <option value="">—</option>
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        ) : (
-          <input
-            type="number"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onBlur={handleSave}
-            disabled={saving}
-            className="h-8 w-28 rounded-md border border-border bg-background px-2 text-right text-sm"
-          />
-        )}
         {metric.isOverridden && metric.autoValue != null && (
           <button
             type="button"

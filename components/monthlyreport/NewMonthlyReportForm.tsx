@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { computeScheduledSendDate } from "@/lib/monthlyReportDerive";
 import { METRIC_LABELS, type MetricSource, type MonthlyMetricKey } from "@/lib/monthlyReportTypes";
+import { accentForIndex } from "@/lib/reportTheme";
 
 export function NewMonthlyReportForm({
   clientId,
@@ -14,12 +15,14 @@ export function NewMonthlyReportForm({
   gscConfigured,
   sheetConfigured,
   gbpConfigured,
+  existingReportCount,
 }: {
   clientId: string;
   sendDayOfMonth: number;
   gscConfigured: boolean;
   sheetConfigured: boolean;
   gbpConfigured: boolean;
+  existingReportCount: number;
 }) {
   const router = useRouter();
   const today = new Date();
@@ -56,6 +59,7 @@ export function NewMonthlyReportForm({
         period_start: periodStart,
         period_end: periodEnd,
         scheduled_send_date: computeScheduledSendDate(periodEnd, sendDayOfMonth),
+        accent_color: accentForIndex(existingReportCount).accent,
       })
       .select("id")
       .single();
