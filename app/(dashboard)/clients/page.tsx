@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { fetchClientRoster } from "@/lib/queries";
+import { fetchClientRoster, fetchOpenIssueSeveritySummary } from "@/lib/queries";
 import { ClientRosterTable } from "@/components/crawler/ClientRosterTable";
 import { ClientForm } from "@/components/crawler/ClientForm";
 import { EmptyState } from "@/components/crawler/EmptyState";
+import { OverviewSummaryCard } from "@/components/crawler/OverviewSummaryCard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,10 @@ export default async function ClientsPage() {
 
   const supabase = createClient();
   const roster = await fetchClientRoster(supabase);
+  const issueSummary = await fetchOpenIssueSeveritySummary(
+    supabase,
+    roster.map((c) => c.id),
+  );
 
   return (
     <div className="space-y-8">
@@ -32,6 +37,8 @@ export default async function ClientsPage() {
       ) : (
         <ClientRosterTable clients={roster} />
       )}
+
+      <OverviewSummaryCard summary={issueSummary} />
 
       <Card>
         <CardHeader>

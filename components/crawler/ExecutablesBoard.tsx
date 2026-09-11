@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/crawler/EmptyState";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
+import { syncFixedIssueToReport } from "@/lib/issueReportSync";
 import { ISSUE_CATEGORY_LABELS, type Issue, type IssueStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
@@ -39,6 +40,9 @@ function ExecutableRow({ issue }: { issue: Issue }) {
       activity_type: "status_change",
       new_status: newStatus,
     });
+    if (newStatus === "fixed") {
+      await syncFixedIssueToReport(supabase, issue);
+    }
     setBusy(null);
     router.refresh();
   }

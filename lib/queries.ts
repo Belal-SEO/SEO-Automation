@@ -6,6 +6,8 @@ import type {
   Audit,
   Issue,
   IssueActivity,
+  IssueSeverity,
+  IssueSeveritySummary,
   MetricSnapshot,
   Report,
 } from "@/lib/types";
@@ -56,6 +58,7 @@ export function mapIssue(row: Row<"issues">): Issue {
     afterScreenshotUrl: row.after_screenshot_url,
     isExecutable: row.is_executable,
     executableAddedAt: row.executable_added_at,
+    assignedTo: row.assigned_to,
   };
 }
 
@@ -161,4 +164,26 @@ export async function fetchClientRoster(
         : ((latestReport?.status as ClientRosterRow["latestReportStatus"]) ?? "none"),
     };
   });
+}
+
+/** Total + per-severity counts of unresolved (open/in_progress) issues across the given clients -- powers the Overview summary card. */
+export async function fetchOpenIssueSeveritySummary(
+  supabase: SupabaseClient<Database>,
+  clientIds: string[],
+): Promise<IssueSeveritySummary> {
+  const bySeverity: Record<IssueSeverity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  if (clientIds.length === 0) return { total: 0, bySeverity };
+
+  const { data, error } = await supabase
+    .from("issues")
+    .select("severity")
+    .in("client_id", clientIds)
+    .in("status", ["open", "in_progress"]);
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const severity = row.severity as IssueSeverity;
+    if (severity in bySeverity) bySeverity[severity] += 1;
+  }
+  return { total: data?.length ?? 0, bySeverity };
 }

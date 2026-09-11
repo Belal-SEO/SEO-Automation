@@ -80,6 +80,7 @@ export interface Database {
           after_screenshot_url: string | null;
           is_executable: boolean;
           executable_added_at: string | null;
+          assigned_to: string | null;
         };
         Insert: {
           id?: string;
@@ -96,6 +97,7 @@ export interface Database {
           after_screenshot_url?: string | null;
           is_executable?: boolean;
           executable_added_at?: string | null;
+          assigned_to?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["issues"]["Insert"]>;
         Relationships: [
