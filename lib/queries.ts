@@ -25,6 +25,7 @@ export function mapClient(row: Row<"clients">): Client {
     reportCadenceDays: row.report_cadence_days,
     criticalAlertThreshold: row.critical_alert_threshold,
     customAuditInstructions: row.custom_audit_instructions,
+    wpRemoteSiteId: row.wp_remote_site_id,
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -59,6 +60,7 @@ export function mapIssue(row: Row<"issues">): Issue {
     isExecutable: row.is_executable,
     executableAddedAt: row.executable_added_at,
     assignedTo: row.assigned_to,
+    externalId: row.external_id,
   };
 }
 

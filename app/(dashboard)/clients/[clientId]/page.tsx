@@ -12,6 +12,7 @@ import { CWVTrendChart } from "@/components/crawler/CWVTrendChart";
 import { BeforeAfterGallery } from "@/components/crawler/BeforeAfterGallery";
 import { NotificationSettings } from "@/components/crawler/NotificationSettings";
 import { AuditInstructionsSettings } from "@/components/crawler/AuditInstructionsSettings";
+import { WpRemoteSecurityPanel } from "@/components/crawler/WpRemoteSecurityPanel";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { formatDate } from "@/lib/utils";
 
@@ -48,8 +49,12 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
 
   const audits = (auditRows ?? []).map(mapAudit);
   const reports = (reportRows ?? []).map(mapReport);
-  const latestAudit = audits[0] ?? null;
-  const inProgressAudit = audits.find((a) => a.status === "queued" || a.status === "crawling" || a.status === "analyzing");
+  const crawlAudits = audits.filter((a) => a.source !== "wp_remote");
+  const latestAudit = crawlAudits[0] ?? null;
+  const wpRemoteAudit = audits.find((a) => a.source === "wp_remote") ?? null;
+  const inProgressAudit = crawlAudits.find(
+    (a) => a.status === "queued" || a.status === "crawling" || a.status === "analyzing",
+  );
 
   const auditIds = audits.map((a) => a.id);
   const [{ data: issueRows }, { data: metricRows }] = await Promise.all([
@@ -154,6 +159,15 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>WP Remote security</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WpRemoteSecurityPanel client={client} lastSync={wpRemoteAudit} />
         </CardContent>
       </Card>
 

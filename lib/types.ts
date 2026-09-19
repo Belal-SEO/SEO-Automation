@@ -10,12 +10,13 @@ export interface Client {
   reportCadenceDays: number;
   criticalAlertThreshold: number;
   customAuditInstructions: string | null;
+  wpRemoteSiteId: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export type AuditSource = "ai_crawl" | "psi" | "manual";
+export type AuditSource = "ai_crawl" | "psi" | "manual" | "wp_remote";
 export type AuditStatus = "queued" | "crawling" | "analyzing" | "complete" | "failed";
 
 export interface Audit {
@@ -33,7 +34,10 @@ export type IssueCategory =
   | "page_structure"
   | "indexability"
   | "meta"
-  | "local_seo";
+  | "local_seo"
+  | "malware"
+  | "vulnerability"
+  | "outdated_software";
 
 export type IssueSeverity = "critical" | "high" | "medium" | "low";
 export type IssueStatus = "open" | "in_progress" | "fixed";
@@ -54,6 +58,7 @@ export interface Issue {
   isExecutable: boolean;
   executableAddedAt: string | null;
   assignedTo: string | null;
+  externalId: string | null;
 }
 
 export type IssueActivityType = "note" | "status_change" | "added_to_executables" | "removed_from_executables";
@@ -102,6 +107,9 @@ export const ISSUE_CATEGORY_LABELS: Record<IssueCategory, string> = {
   indexability: "Indexability",
   meta: "Meta Tags",
   local_seo: "Local SEO",
+  malware: "Malware / Malicious Code",
+  vulnerability: "Known Vulnerability",
+  outdated_software: "Outdated Software",
 };
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = {

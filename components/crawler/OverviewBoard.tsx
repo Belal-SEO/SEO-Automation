@@ -16,9 +16,13 @@ import {
   SEVERITY_ORDER,
   type Client,
   type Issue,
+  type IssueCategory,
   type IssueSeverity,
   type IssueStatus,
 } from "@/lib/types";
+
+const SECURITY_CATEGORIES = new Set<IssueCategory>(["malware", "vulnerability", "outdated_software"]);
+type IssueType = "all" | "seo" | "security";
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
   { value: "open", label: "Not started" },
@@ -179,6 +183,7 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
   const [severity, setSeverity] = useState<IssueSeverity | "all">("all");
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<IssueStatus | "all">("open");
+  const [type, setType] = useState<IssueType>("all");
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c.brand])), [clients]);
 
@@ -187,8 +192,9 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
       .filter((i) => severity === "all" || i.severity === severity)
       .filter((i) => clientId === "all" || i.clientId === clientId)
       .filter((i) => status === "all" || i.status === status)
+      .filter((i) => type === "all" || (type === "security") === SECURITY_CATEGORIES.has(i.category))
       .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-  }, [issues, severity, clientId, status]);
+  }, [issues, severity, clientId, status, type]);
 
   return (
     <div className="space-y-4">
@@ -205,6 +211,18 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Type</span>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as IssueType)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            <option value="all">All</option>
+            <option value="seo">SEO</option>
+            <option value="security">Security</option>
           </select>
         </label>
         <label className="flex items-center gap-2">

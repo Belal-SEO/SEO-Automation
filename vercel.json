@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/monthly-report-reminders",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/wp-remote-security",
+      "schedule": "0 6 * * *"
     }
   ]
 }

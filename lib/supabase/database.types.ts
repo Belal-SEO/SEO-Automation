@@ -16,6 +16,7 @@ export interface Database {
           report_cadence_days: number;
           critical_alert_threshold: number;
           custom_audit_instructions: string | null;
+          wp_remote_site_id: string | null;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -30,6 +31,7 @@ export interface Database {
           report_cadence_days?: number;
           critical_alert_threshold?: number;
           custom_audit_instructions?: string | null;
+          wp_remote_site_id?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -81,6 +83,7 @@ export interface Database {
           is_executable: boolean;
           executable_added_at: string | null;
           assigned_to: string | null;
+          external_id: string | null;
         };
         Insert: {
           id?: string;
@@ -98,6 +101,7 @@ export interface Database {
           is_executable?: boolean;
           executable_added_at?: string | null;
           assigned_to?: string | null;
+          external_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["issues"]["Insert"]>;
         Relationships: [
