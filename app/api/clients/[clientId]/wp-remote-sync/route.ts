@@ -21,8 +21,13 @@ export async function POST(request: Request, { params }: { params: { clientId: s
     const result = await syncClientSecurity(supabase, client, sites);
 
     if (!result.matched) {
+      const overrideNote = client.wpRemoteSiteId
+        ? ` The site ID field is set to "${client.wpRemoteSiteId}", which also didn't match any WP Remote site by ID or URL.`
+        : "";
       return NextResponse.json(
-        { error: `No matching WP Remote site found for ${client.domain}. Set the site ID manually below.` },
+        {
+          error: `No WP Remote site found matching ${client.domain}.${overrideNote} Check that the site is added in WP Remote under this exact domain, or paste its URL into the site ID field below.`,
+        },
         { status: 422 },
       );
     }

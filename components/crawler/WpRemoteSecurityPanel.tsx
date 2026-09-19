@@ -12,8 +12,9 @@ export function WpRemoteSecurityPanel({ client, lastSync }: { client: Client; la
   const router = useRouter();
   const [siteId, setSiteId] = useState(client.wpRemoteSiteId ?? "");
   const [saving, setSaving] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [resultMessage, setResultMessage] = useState("");
 
   async function handleSaveSiteId() {
     if (siteId === (client.wpRemoteSiteId ?? "")) return;
@@ -27,11 +28,18 @@ export function WpRemoteSecurityPanel({ client, lastSync }: { client: Client; la
   async function handleSync() {
     setSyncStatus("loading");
     setErrorMessage("");
+    setResultMessage("");
     try {
       const res = await fetch(`/api/clients/${client.id}/wp-remote-sync`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
-      setSyncStatus("idle");
+      setResultMessage(
+        `Matched ${body.siteUrl ?? body.siteId} — ${body.findingCount} open finding${body.findingCount === 1 ? "" : "s"}` +
+          (body.newCount > 0 ? `, ${body.newCount} new` : "") +
+          (body.resolvedCount > 0 ? `, ${body.resolvedCount} auto-resolved` : "") +
+          ".",
+      );
+      setSyncStatus("success");
       router.refresh();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Sync failed.");
@@ -62,8 +70,10 @@ export function WpRemoteSecurityPanel({ client, lastSync }: { client: Client; la
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            WP Remote site ID{" "}
-            <span className="text-muted-foreground">(optional — only needed if the domain doesn&apos;t auto-match)</span>
+            WP Remote site override{" "}
+            <span className="text-muted-foreground">
+              (optional — paste the site&apos;s URL here only if it doesn&apos;t auto-match by domain)
+            </span>
           </label>
           <Input
             value={siteId}
@@ -79,6 +89,7 @@ export function WpRemoteSecurityPanel({ client, lastSync }: { client: Client; la
         </Button>
       </div>
       {syncStatus === "error" && <p className="text-sm text-destructive">{errorMessage}</p>}
+      {syncStatus === "success" && <p className="text-sm text-emerald-600">{resultMessage}</p>}
     </div>
   );
 }

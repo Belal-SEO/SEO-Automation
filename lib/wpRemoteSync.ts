@@ -27,16 +27,30 @@ function normalizeDomain(url: string): string {
     .replace(/\/+$/, "");
 }
 
-/** Manual override (client.wpRemoteSiteId) wins; otherwise matches by normalized domain. */
+function matchByDomain(domain: string, sites: WpRemoteSite[]): WpRemoteSite | null {
+  const target = normalizeDomain(domain);
+  return sites.find((s) => normalizeDomain(s.url) === target || normalizeDomain(s.homeUrl) === target) ?? null;
+}
+
+/**
+ * Resolves a client to its WP Remote site. Tries, in order: the manual
+ * override as a literal site ID, the override as a URL/domain (since the
+ * override field isn't guaranteed to hold WP Remote's opaque internal ID --
+ * that's not visible anywhere in WP Remote's own dashboard, so people
+ * reasonably paste a site name or URL there instead), then the client's own
+ * domain. A garbage override never permanently blocks matching.
+ */
 export function resolveWpRemoteSite(
   client: Pick<Client, "domain" | "wpRemoteSiteId">,
   sites: WpRemoteSite[],
 ): WpRemoteSite | null {
   if (client.wpRemoteSiteId) {
-    return sites.find((s) => s.id === client.wpRemoteSiteId) ?? null;
+    const byId = sites.find((s) => s.id === client.wpRemoteSiteId);
+    if (byId) return byId;
+    const byOverrideAsDomain = matchByDomain(client.wpRemoteSiteId, sites);
+    if (byOverrideAsDomain) return byOverrideAsDomain;
   }
-  const target = normalizeDomain(client.domain);
-  return sites.find((s) => normalizeDomain(s.url) === target || normalizeDomain(s.homeUrl) === target) ?? null;
+  return matchByDomain(client.domain, sites);
 }
 
 function severityFromCvss(rating: WpCvssRating | null): IssueSeverity {
@@ -226,6 +240,7 @@ async function collectFindings(site: WpRemoteSite): Promise<Finding[]> {
 export interface WpRemoteSyncResult {
   matched: boolean;
   siteId: string | null;
+  siteUrl: string | null;
   findingCount: number;
   newCount: number;
   resolvedCount: number;
@@ -245,7 +260,7 @@ export async function syncClientSecurity(
   sites: WpRemoteSite[],
 ): Promise<WpRemoteSyncResult> {
   const site = resolveWpRemoteSite(client, sites);
-  if (!site) return { matched: false, siteId: null, findingCount: 0, newCount: 0, resolvedCount: 0 };
+  if (!site) return { matched: false, siteId: null, siteUrl: null, findingCount: 0, newCount: 0, resolvedCount: 0 };
 
   if (client.wpRemoteSiteId !== site.id) {
     await supabase.from("clients").update({ wp_remote_site_id: site.id }).eq("id", client.id);
@@ -303,5 +318,5 @@ export async function syncClientSecurity(
     resolvedCount = staleIds.length;
   }
 
-  return { matched: true, siteId: site.id, findingCount: findings.length, newCount, resolvedCount };
+  return { matched: true, siteId: site.id, siteUrl: site.url, findingCount: findings.length, newCount, resolvedCount };
 }
