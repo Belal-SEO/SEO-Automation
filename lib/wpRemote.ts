@@ -29,9 +29,17 @@ async function wpRemoteRequest<T>(
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const message = body?.error?.message ?? `WP Remote request failed (${res.status})`;
-    throw new Error(message);
+    const raw = await res.text().catch(() => "");
+    const body = (() => {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    })();
+    const detail = body?.error?.message ?? raw;
+    const code = body?.error?.code ? ` [${body.error.code}]` : "";
+    throw new Error(`WP Remote ${path}${code} (${res.status}): ${detail || "no error body"} -- query: ${url.search}`);
   }
 
   return res.json() as Promise<T>;
