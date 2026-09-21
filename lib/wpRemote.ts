@@ -18,7 +18,10 @@ async function wpRemoteRequest<T>(
   for (const [key, value] of Object.entries(searchParams ?? {})) {
     if (value === undefined) continue;
     if (Array.isArray(value)) {
-      for (const item of value) url.searchParams.append(key, item);
+      // Their backend only recognizes an array via bracket notation --
+      // a single bare `key=x` (no brackets) gets parsed as a plain scalar,
+      // even though the OpenAPI spec's style annotation implies otherwise.
+      for (const item of value) url.searchParams.append(`${key}[]`, item);
     } else {
       url.searchParams.set(key, String(value));
     }
@@ -37,7 +40,13 @@ async function wpRemoteRequest<T>(
         return null;
       }
     })();
-    const detail = body?.error?.message ?? raw;
+    const details = Array.isArray(body?.error?.details)
+      ? " " +
+        body.error.details
+          .map((d: { param?: string; message?: string }) => `[${d.param ?? "?"}: ${d.message ?? "?"}]`)
+          .join(" ")
+      : "";
+    const detail = (body?.error?.message ?? raw) + details;
     const code = body?.error?.code ? ` [${body.error.code}]` : "";
     throw new Error(`WP Remote ${path}${code} (${res.status}): ${detail || "no error body"} -- query: ${url.search}`);
   }
