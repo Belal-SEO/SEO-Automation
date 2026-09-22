@@ -198,7 +198,7 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
 
       <Card>
         <CardHeader>
-          <CardTitle>Import audit report</CardTitle>
+          <CardTitle>Import tasks from text</CardTitle>
         </CardHeader>
         <CardContent>
           <ImportReportPanel clientId={client.id} clientDomain={client.domain} isNew={isNew} />

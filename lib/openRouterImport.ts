@@ -1,41 +1,11 @@
-// Server-only: extracts actionable tasks from an uploaded audit report
-// (PDF or HTML) -- pdf-parse for text extraction, then OpenRouter's
-// OpenAI-compatible chat completions API (any model the user configures)
-// for structured extraction. Never import from a "use client" component --
+// Server-only: extracts actionable tasks from pasted audit report text via
+// OpenRouter's OpenAI-compatible chat completions API (any model the user
+// configures). Never import from a "use client" component --
 // OPENROUTER_API_KEY must stay off the browser.
 
-import { PDFParse } from "pdf-parse";
 import { ISSUE_CATEGORY_LABELS, type IssueCategory, type IssueSeverity } from "@/lib/types";
 
-const MAX_REPORT_CHARS = 120_000;
-
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    return result.text;
-  } finally {
-    await parser.destroy();
-  }
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0?39;/gi, "'")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s*\n+/g, "\n\n")
-    .trim();
-}
-
-export type ReportFileType = "pdf" | "html";
+const MAX_TEXT_CHARS = 120_000;
 
 export interface ExtractedTask {
   description: string;
@@ -102,14 +72,13 @@ function normalizeSeverity(value: unknown): IssueSeverity {
 }
 
 /**
- * Extracts a structured task list from an uploaded PDF/HTML audit report.
+ * Extracts a structured task list from pasted audit report text.
  * `allowedCategories` constrains what the model may tag each task with --
  * pass just ["sprint_task"] for new-stage clients, or the full technical
  * category set for legacy clients.
  */
-export async function extractTasksFromReport(
-  buffer: Buffer,
-  fileType: ReportFileType,
+export async function extractTasksFromText(
+  text: string,
   allowedCategories: IssueCategory[],
 ): Promise<ExtractedTask[]> {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -124,12 +93,12 @@ export async function extractTasksFromReport(
     throw new Error("No allowed categories were provided for extraction.");
   }
 
-  const rawText = fileType === "pdf" ? await extractPdfText(buffer) : htmlToText(buffer.toString("utf-8"));
-  const text = rawText.trim();
-  if (!text) {
-    throw new Error("Couldn't extract any text from this file -- it may be a scanned/image-only PDF.");
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("Paste some report text first.");
   }
-  const truncated = text.length > MAX_REPORT_CHARS ? `${text.slice(0, MAX_REPORT_CHARS)}\n\n[...truncated]` : text;
+  const truncated =
+    trimmed.length > MAX_TEXT_CHARS ? `${trimmed.slice(0, MAX_TEXT_CHARS)}\n\n[...truncated]` : trimmed;
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -187,7 +156,7 @@ export async function extractTasksFromReport(
   }
 
   if (tasks.length === 0) {
-    throw new Error("No actionable tasks were found in this report.");
+    throw new Error("No actionable tasks were found in this text.");
   }
 
   return tasks;

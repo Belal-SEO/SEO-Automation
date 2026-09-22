@@ -42,7 +42,7 @@ export function ImportReportPanel({
   isNew: boolean;
 }) {
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
+  const [text, setText] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<DraftTask[] | null>(null);
@@ -50,14 +50,16 @@ export function ImportReportPanel({
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
   async function handleExtract() {
-    if (!file) return;
+    if (!text.trim()) return;
     setExtracting(true);
     setExtractError(null);
     setResultMessage(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/clients/${clientId}/import-report`, { method: "POST", body: formData });
+      const res = await fetch(`/api/clients/${clientId}/import-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
       const rawText = await res.text();
       let body: { error?: string; tasks?: ExtractedTaskResponse[] } = {};
       try {
@@ -106,7 +108,7 @@ export function ImportReportPanel({
       await addManualIssues(supabase, clientId, clientDomain, inputs);
       setResultMessage(`Added ${selected.length} task${selected.length === 1 ? "" : "s"}.`);
       setDrafts(null);
-      setFile(null);
+      setText("");
       router.refresh();
     } catch (err) {
       setExtractError(err instanceof Error ? err.message : "Failed to add tasks.");
@@ -120,18 +122,19 @@ export function ImportReportPanel({
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Upload a PDF or HTML audit report — an AI model reads it and pulls out the actionable tasks below for you
-        to review before anything is added to {isNew ? "Sprint Tasks" : "Issues"}.
+        Paste audit report text below — an AI model reads it and pulls out the actionable tasks below for you to
+        review before anything is added to {isNew ? "Sprint Tasks" : "Issues"}.
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          accept=".pdf,.html,.htm,application/pdf,text/html"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-sm"
+      <div className="space-y-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={8}
+          placeholder="Paste the audit report content here…"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
-        <Button size="sm" onClick={handleExtract} disabled={!file || extracting}>
+        <Button size="sm" onClick={handleExtract} disabled={!text.trim() || extracting}>
           {extracting ? "Reading report…" : "Extract tasks"}
         </Button>
       </div>
