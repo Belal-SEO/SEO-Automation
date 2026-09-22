@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Client } from "@/lib/types";
-import type { Baseline, MonthlyReport, MonthlyReportMetric, MonthlyReportTask } from "@/lib/monthlyReportTypes";
+import { ISSUE_CATEGORY_LABELS, type Client, type Issue } from "@/lib/types";
+import type { Baseline, MonthlyReport, MonthlyReportMetric } from "@/lib/monthlyReportTypes";
 import { computeGrowthPct } from "@/lib/monthlyReportDerive";
 
 const EMAIL_MODEL = "claude-sonnet-5";
@@ -28,6 +28,10 @@ Keep it concise: a greeting, 1-2 sentences on the period's headline result, a sh
 delivered, and a warm sign-off. This is an email body, not a full report -- the full report is attached
 or linked separately, so don't try to restate every metric.
 
+Every item in "Delivered work" has been verified complete by the team member who owned it -- state these
+as finished work, not work in progress. If "Delivered work" is empty, don't imply any items shipped --
+lean on the metrics instead, or keep the update brief.
+
 Return only subject and body via the draft_client_email tool. The body should be plain text with blank
 lines between paragraphs (no markdown headers or HTML).`;
 
@@ -36,7 +40,7 @@ export interface GenerateEmailDraftInput {
   report: MonthlyReport;
   baseline: Baseline | null;
   metrics: MonthlyReportMetric[];
-  tasks: MonthlyReportTask[];
+  completedAssignedIssues: Issue[];
 }
 
 export async function generateEmailDraft(input: GenerateEmailDraftInput): Promise<{ subject: string; body: string }> {
@@ -66,9 +70,10 @@ export async function generateEmailDraft(input: GenerateEmailDraftInput): Promis
     };
   });
 
-  const deliveredWork = input.tasks
-    .filter((t) => t.listKey !== "notes")
-    .map((t) => ({ list: t.listKey, text: t.text }));
+  const deliveredWork = input.completedAssignedIssues.map((i) => ({
+    category: ISSUE_CATEGORY_LABELS[i.category],
+    description: i.description,
+  }));
 
   const message = await anthropic.messages.create({
     model: EMAIL_MODEL,

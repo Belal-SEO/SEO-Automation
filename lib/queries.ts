@@ -189,3 +189,22 @@ export async function fetchOpenIssueSeveritySummary(
   }
   return { total: data?.length ?? 0, bySeverity };
 }
+
+/** Issues fixed by a named assignee within a date range -- the monthly client email draft only ever cites accountable, finished work. */
+export async function fetchCompletedAssignedIssues(
+  supabase: SupabaseClient<Database>,
+  clientId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<Issue[]> {
+  const { data, error } = await supabase
+    .from("issues")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("status", "fixed")
+    .not("assigned_to", "is", null)
+    .gte("fixed_at", `${periodStart}T00:00:00Z`)
+    .lte("fixed_at", `${periodEnd}T23:59:59Z`);
+  if (error) throw error;
+  return (data ?? []).map(mapIssue);
+}

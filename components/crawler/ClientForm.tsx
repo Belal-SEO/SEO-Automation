@@ -61,21 +61,32 @@ export function ClientForm({ onCreated }: { onCreated?: () => void }) {
     }
 
     setSubmitting(true);
-    const { error: insertError } = await supabase.from("clients").insert({
-      name,
-      brand,
-      locations: locations
-        .split(",")
-        .map((l) => l.trim())
-        .filter(Boolean),
-      domain,
-      cms_type: cmsType,
-    });
+    const { data: created, error: insertError } = await supabase
+      .from("clients")
+      .insert({
+        name,
+        brand,
+        locations: locations
+          .split(",")
+          .map((l) => l.trim())
+          .filter(Boolean),
+        domain,
+        cms_type: cmsType,
+      })
+      .select("id")
+      .single();
     setSubmitting(false);
 
     if (insertError) {
       setError(insertError.message);
       return;
+    }
+
+    // Best-effort: the site may not be added in WP Remote yet, or the
+    // domain may not auto-match -- either way, this shouldn't block or
+    // fail client creation. The client page's "Sync now" button covers it.
+    if (created) {
+      fetch(`/api/clients/${created.id}/wp-remote-sync`, { method: "POST" }).catch(() => {});
     }
 
     setDuplicateWarning(null);

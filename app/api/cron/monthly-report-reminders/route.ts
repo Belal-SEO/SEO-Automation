@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { sendPlainEmail } from "@/lib/google";
-import { mapClient } from "@/lib/queries";
-import { mapBaseline, mapMonthlyReport, mapMonthlyReportMetric, mapMonthlyReportTask } from "@/lib/monthlyReportQueries";
+import { fetchCompletedAssignedIssues, mapClient } from "@/lib/queries";
+import { mapBaseline, mapMonthlyReport, mapMonthlyReportMetric } from "@/lib/monthlyReportQueries";
 import { refreshMonthlyReport } from "@/lib/monthlyReportRefresh";
 import { generateEmailDraft } from "@/lib/monthlyReportEmail";
 
@@ -70,22 +70,25 @@ export async function GET(request: Request) {
       if (!clientRow) throw new Error("Client not found.");
       const client = mapClient(clientRow);
 
-      const [{ data: baselineRow }, { data: metricRows }, { data: taskRows }, { data: existingDraft }] =
-        await Promise.all([
-          supabase.from("baselines").select("*").eq("client_id", report.clientId).maybeSingle(),
-          supabase.from("monthly_report_metrics").select("*").eq("monthly_report_id", report.id),
-          supabase.from("monthly_report_tasks").select("*").eq("monthly_report_id", report.id),
-          supabase.from("monthly_report_email_drafts").select("*").eq("monthly_report_id", report.id).maybeSingle(),
-        ]);
+      const [{ data: baselineRow }, { data: metricRows }, { data: existingDraft }] = await Promise.all([
+        supabase.from("baselines").select("*").eq("client_id", report.clientId).maybeSingle(),
+        supabase.from("monthly_report_metrics").select("*").eq("monthly_report_id", report.id),
+        supabase.from("monthly_report_email_drafts").select("*").eq("monthly_report_id", report.id).maybeSingle(),
+      ]);
 
       const baseline = baselineRow ? mapBaseline(baselineRow) : null;
       const metrics = (metricRows ?? []).map(mapMonthlyReportMetric);
-      const tasks = (taskRows ?? []).map(mapMonthlyReportTask);
 
       let draftSubject = existingDraft?.subject;
       let draftBody = existingDraft?.body;
       if (!existingDraft) {
-        const draft = await generateEmailDraft({ client, report, baseline, metrics, tasks });
+        const completedAssignedIssues = await fetchCompletedAssignedIssues(
+          supabase,
+          report.clientId,
+          report.periodStart,
+          report.periodEnd,
+        );
+        const draft = await generateEmailDraft({ client, report, baseline, metrics, completedAssignedIssues });
         draftSubject = draft.subject;
         draftBody = draft.body;
         await supabase.from("monthly_report_email_drafts").upsert({

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { mapClient } from "@/lib/queries";
-import { mapBaseline, mapMonthlyReport, mapMonthlyReportMetric, mapMonthlyReportTask } from "@/lib/monthlyReportQueries";
+import { fetchCompletedAssignedIssues, mapClient } from "@/lib/queries";
+import { mapBaseline, mapMonthlyReport, mapMonthlyReportMetric } from "@/lib/monthlyReportQueries";
 import { generateEmailDraft } from "@/lib/monthlyReportEmail";
 
 /** Generates (or regenerates) the draft client email for a report and upserts it. */
@@ -14,14 +14,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
   const report = mapMonthlyReport(reportRow);
 
-  const [{ data: clientRow }, { data: settingsRow }, { data: baselineRow }, { data: metricRows }, { data: taskRows }] =
-    await Promise.all([
-      supabase.from("clients").select("*").eq("id", report.clientId).maybeSingle(),
-      supabase.from("monthly_report_settings").select("client_email").eq("client_id", report.clientId).maybeSingle(),
-      supabase.from("baselines").select("*").eq("client_id", report.clientId).maybeSingle(),
-      supabase.from("monthly_report_metrics").select("*").eq("monthly_report_id", report.id),
-      supabase.from("monthly_report_tasks").select("*").eq("monthly_report_id", report.id),
-    ]);
+  const [{ data: clientRow }, { data: settingsRow }, { data: baselineRow }, { data: metricRows }] = await Promise.all([
+    supabase.from("clients").select("*").eq("id", report.clientId).maybeSingle(),
+    supabase.from("monthly_report_settings").select("client_email").eq("client_id", report.clientId).maybeSingle(),
+    supabase.from("baselines").select("*").eq("client_id", report.clientId).maybeSingle(),
+    supabase.from("monthly_report_metrics").select("*").eq("monthly_report_id", report.id),
+  ]);
 
   if (!clientRow) {
     return NextResponse.json({ error: "Client not found." }, { status: 404 });
@@ -30,11 +28,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const client = mapClient(clientRow);
   const baseline = baselineRow ? mapBaseline(baselineRow) : null;
   const metrics = (metricRows ?? []).map(mapMonthlyReportMetric);
-  const tasks = (taskRows ?? []).map(mapMonthlyReportTask);
+  const completedAssignedIssues = await fetchCompletedAssignedIssues(
+    supabase,
+    report.clientId,
+    report.periodStart,
+    report.periodEnd,
+  );
 
   let draft: { subject: string; body: string };
   try {
-    draft = await generateEmailDraft({ client, report, baseline, metrics, tasks });
+    draft = await generateEmailDraft({ client, report, baseline, metrics, completedAssignedIssues });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Draft generation failed." },
