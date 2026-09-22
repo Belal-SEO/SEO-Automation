@@ -4,6 +4,10 @@ import { extractTasksFromReport, type ReportFileType } from "@/lib/openRouterImp
 import { ISSUE_CATEGORY_LABELS, type IssueCategory } from "@/lib/types";
 
 export const runtime = "nodejs";
+// PDF parsing + the OpenRouter extraction call can run well past Vercel's
+// default function timeout, especially for longer reports -- 60s is the max
+// configurable duration on Hobby, and comfortably covers this on Pro too.
+export const maxDuration = 60;
 
 const ALL_CATEGORIES = Object.keys(ISSUE_CATEGORY_LABELS) as IssueCategory[];
 const LEGACY_CATEGORIES = ALL_CATEGORIES.filter((c) => c !== "sprint_task");

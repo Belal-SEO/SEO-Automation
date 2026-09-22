@@ -58,8 +58,16 @@ export function ImportReportPanel({
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch(`/api/clients/${clientId}/import-report`, { method: "POST", body: formData });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+      const rawText = await res.text();
+      let body: { error?: string; tasks?: ExtractedTaskResponse[] } = {};
+      try {
+        body = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        // Not JSON -- likely a platform-level error page (e.g. a function timeout).
+      }
+      if (!res.ok) {
+        throw new Error(body.error ?? `Request failed (${res.status} ${res.statusText}): ${rawText.slice(0, 300) || "no response body"}`);
+      }
       const tasks: ExtractedTaskResponse[] = body.tasks ?? [];
       setDrafts(
         tasks.map((t) => ({
@@ -86,19 +94,25 @@ export function ImportReportPanel({
     const selected = drafts.filter((d) => d.selected && d.description.trim());
     if (selected.length === 0) return;
     setCreating(true);
-    const supabase = createClient();
-    const inputs: AddManualIssueInput[] = selected.map((d) => ({
-      description: d.description.trim(),
-      severity: d.severity,
-      category: d.category,
-      assignedTo: d.assignedTo.trim() || null,
-    }));
-    await addManualIssues(supabase, clientId, clientDomain, inputs);
-    setCreating(false);
-    setResultMessage(`Added ${selected.length} task${selected.length === 1 ? "" : "s"}.`);
-    setDrafts(null);
-    setFile(null);
-    router.refresh();
+    setExtractError(null);
+    try {
+      const supabase = createClient();
+      const inputs: AddManualIssueInput[] = selected.map((d) => ({
+        description: d.description.trim(),
+        severity: d.severity,
+        category: d.category,
+        assignedTo: d.assignedTo.trim() || null,
+      }));
+      await addManualIssues(supabase, clientId, clientDomain, inputs);
+      setResultMessage(`Added ${selected.length} task${selected.length === 1 ? "" : "s"}.`);
+      setDrafts(null);
+      setFile(null);
+      router.refresh();
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : "Failed to add tasks.");
+    } finally {
+      setCreating(false);
+    }
   }
 
   const selectedCount = drafts?.filter((d) => d.selected).length ?? 0;
