@@ -17,6 +17,10 @@ export interface Database {
           critical_alert_threshold: number;
           custom_audit_instructions: string | null;
           wp_remote_site_id: string | null;
+          stage: string;
+          sprint_started_at: string | null;
+          sprint_deadline: string | null;
+          stage_changed_at: string | null;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -32,6 +36,10 @@ export interface Database {
           critical_alert_threshold?: number;
           custom_audit_instructions?: string | null;
           wp_remote_site_id?: string | null;
+          stage?: string;
+          sprint_started_at?: string | null;
+          sprint_deadline?: string | null;
+          stage_changed_at?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;

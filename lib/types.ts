@@ -1,5 +1,7 @@
 export type CmsType = "wordpress" | "custom" | "shopify" | "wix" | "squarespace" | null;
 
+export type ClientStage = "new" | "legacy";
+
 export interface Client {
   id: string;
   name: string;
@@ -11,6 +13,10 @@ export interface Client {
   criticalAlertThreshold: number;
   customAuditInstructions: string | null;
   wpRemoteSiteId: string | null;
+  stage: ClientStage;
+  sprintStartedAt: string | null;
+  sprintDeadline: string | null;
+  stageChangedAt: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -37,7 +43,8 @@ export type IssueCategory =
   | "local_seo"
   | "malware"
   | "vulnerability"
-  | "outdated_software";
+  | "outdated_software"
+  | "sprint_task";
 
 export type IssueSeverity = "critical" | "high" | "medium" | "low";
 export type IssueStatus = "open" | "in_progress" | "fixed";
@@ -110,6 +117,7 @@ export const ISSUE_CATEGORY_LABELS: Record<IssueCategory, string> = {
   malware: "Malware / Malicious Code",
   vulnerability: "Known Vulnerability",
   outdated_software: "Outdated Software",
+  sprint_task: "Sprint Task",
 };
 
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = {

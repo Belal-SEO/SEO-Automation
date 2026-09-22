@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapAudit, mapClient, mapIssue, mapMetricSnapshot, mapReport } from "@/lib/queries";
+import { computeSprintTaskCompletion } from "@/lib/clientStage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AuditTriggerButton } from "@/components/crawler/AuditTriggerButton";
 import { GenerateReportButton } from "@/components/crawler/GenerateReportButton";
@@ -13,6 +14,8 @@ import { BeforeAfterGallery } from "@/components/crawler/BeforeAfterGallery";
 import { NotificationSettings } from "@/components/crawler/NotificationSettings";
 import { AuditInstructionsSettings } from "@/components/crawler/AuditInstructionsSettings";
 import { WpRemoteSecurityPanel } from "@/components/crawler/WpRemoteSecurityPanel";
+import { SprintStatusPanel } from "@/components/crawler/SprintStatusPanel";
+import { SprintTasksBoard } from "@/components/crawler/SprintTasksBoard";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { formatDate } from "@/lib/utils";
 
@@ -31,6 +34,7 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
 
   if (!clientRow) notFound();
   const client = mapClient(clientRow);
+  const isNew = client.stage === "new";
 
   const [{ data: auditRows }, { data: reportRows }] = await Promise.all([
     supabase
@@ -57,7 +61,7 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
   );
 
   const auditIds = audits.map((a) => a.id);
-  const [{ data: issueRows }, { data: metricRows }] = await Promise.all([
+  const [{ data: issueRows }, { data: metricRows }, sprintCompletion] = await Promise.all([
     auditIds.length > 0
       ? supabase.from("issues").select("*").in("audit_id", auditIds)
       : Promise.resolve({ data: [] as never[] }),
@@ -66,11 +70,15 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
       .select("*")
       .eq("client_id", client.id)
       .order("captured_at", { ascending: true }),
+    isNew ? computeSprintTaskCompletion(supabase, client.id) : Promise.resolve(null),
   ]);
 
   const issues = (issueRows ?? []).map(mapIssue);
   const metricSnapshots = (metricRows ?? []).map(mapMetricSnapshot);
   const fixedIssues = issues.filter((i) => i.status === "fixed");
+  const sprintTasks = issues
+    .filter((i) => i.category === "sprint_task")
+    .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
 
   return (
     <div className="space-y-8">
@@ -94,73 +102,98 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           >
             Monthly Reports
           </Link>
-          <GenerateReportButton clientId={client.id} />
-          <AuditTriggerButton clientId={client.id} />
+          {!isNew && (
+            <>
+              <GenerateReportButton clientId={client.id} />
+              <AuditTriggerButton clientId={client.id} />
+            </>
+          )}
         </div>
       </div>
 
-      {inProgressAudit && (
+      {isNew && sprintCompletion && (
+        <Card>
+          <CardContent className="p-4">
+            <SprintStatusPanel client={client} completion={sprintCompletion} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isNew && inProgressAudit && (
         <CrawlStatusBanner status={inProgressAudit.status} error={inProgressAudit.error} />
       )}
-      {latestAudit?.status === "failed" && (
+      {!isNew && latestAudit?.status === "failed" && (
         <CrawlStatusBanner status="failed" error={latestAudit.error} />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Core Web Vitals trend</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CWVTrendChart snapshots={metricSnapshots} />
-        </CardContent>
-      </Card>
+      {isNew ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sprint tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SprintTasksBoard clientId={client.id} clientDomain={client.domain} tasks={sprintTasks} />
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Core Web Vitals trend</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CWVTrendChart snapshots={metricSnapshots} />
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Issues {latestAudit ? `— latest audit (${formatDate(latestAudit.runAt)})` : ""}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {audits.length === 0 ? (
-            <EmptyState
-              title="No audits yet"
-              description="Connect a crawl source and run the first audit to see issues here."
-            />
-          ) : (
-            <IssueTable issues={issues} />
-          )}
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Issues {latestAudit ? `— latest audit (${formatDate(latestAudit.runAt)})` : ""}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {audits.length === 0 ? (
+                <EmptyState
+                  title="No audits yet"
+                  description="Connect a crawl source and run the first audit to see issues here."
+                />
+              ) : (
+                <IssueTable issues={issues} />
+              )}
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Before / after</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BeforeAfterGallery issues={fixedIssues} />
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Before / after</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BeforeAfterGallery issues={fixedIssues} />
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Reports</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {reports.length === 0 ? (
-            <EmptyState title="No reports yet" description="Generate a draft once an audit has completed." />
-          ) : (
-            <ul className="divide-y divide-border">
-              {reports.map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-2 text-sm">
-                  <Link href={`/clients/${client.id}/reports/${r.id}`} className="hover:underline">
-                    {formatDate(r.periodStart)} – {formatDate(r.periodEnd)}
-                  </Link>
-                  <span className="capitalize text-muted-foreground">{r.status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Reports</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {reports.length === 0 ? (
+                <EmptyState title="No reports yet" description="Generate a draft once an audit has completed." />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {reports.map((r) => (
+                    <li key={r.id} className="flex items-center justify-between py-2 text-sm">
+                      <Link href={`/clients/${client.id}/reports/${r.id}`} className="hover:underline">
+                        {formatDate(r.periodStart)} – {formatDate(r.periodEnd)}
+                      </Link>
+                      <span className="capitalize text-muted-foreground">{r.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Card>
         <CardHeader>
@@ -171,14 +204,16 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Audit instructions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AuditInstructionsSettings client={client} />
-        </CardContent>
-      </Card>
+      {!isNew && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit instructions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AuditInstructionsSettings client={client} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

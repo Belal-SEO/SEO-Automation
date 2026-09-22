@@ -22,7 +22,14 @@ import {
 } from "@/lib/types";
 
 const SECURITY_CATEGORIES = new Set<IssueCategory>(["malware", "vulnerability", "outdated_software"]);
-type IssueType = "all" | "seo" | "security";
+const SPRINT_CATEGORIES = new Set<IssueCategory>(["sprint_task"]);
+type IssueType = "all" | "seo" | "security" | "sprint";
+
+function categoryType(category: IssueCategory): IssueType {
+  if (SECURITY_CATEGORIES.has(category)) return "security";
+  if (SPRINT_CATEGORIES.has(category)) return "sprint";
+  return "seo";
+}
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
   { value: "open", label: "Not started" },
@@ -192,7 +199,7 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
       .filter((i) => severity === "all" || i.severity === severity)
       .filter((i) => clientId === "all" || i.clientId === clientId)
       .filter((i) => status === "all" || i.status === status)
-      .filter((i) => type === "all" || (type === "security") === SECURITY_CATEGORIES.has(i.category))
+      .filter((i) => type === "all" || categoryType(i.category) === type)
       .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
   }, [issues, severity, clientId, status, type]);
 
@@ -223,6 +230,7 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
             <option value="all">All</option>
             <option value="seo">SEO</option>
             <option value="security">Security</option>
+            <option value="sprint">Sprint</option>
           </select>
         </label>
         <label className="flex items-center gap-2">

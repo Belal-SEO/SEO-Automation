@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { CmsType } from "@/lib/types";
+import { computeSprintDeadline } from "@/lib/clientStage";
+import type { ClientStage, CmsType } from "@/lib/types";
 
 const CMS_OPTIONS: { value: CmsType; label: string }[] = [
   { value: null, label: "Unknown" },
@@ -32,6 +33,7 @@ export function ClientForm({ onCreated }: { onCreated?: () => void }) {
   const [locations, setLocations] = useState("");
   const [domain, setDomain] = useState("");
   const [cmsType, setCmsType] = useState<CmsType>(null);
+  const [stage, setStage] = useState<ClientStage>("new");
   const [domainError, setDomainError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +74,9 @@ export function ClientForm({ onCreated }: { onCreated?: () => void }) {
           .filter(Boolean),
         domain,
         cms_type: cmsType,
+        stage,
+        sprint_started_at: stage === "new" ? new Date().toISOString() : null,
+        sprint_deadline: stage === "new" ? computeSprintDeadline() : null,
       })
       .select("id")
       .single();
@@ -139,6 +144,18 @@ export function ClientForm({ onCreated }: { onCreated?: () => void }) {
               {opt.label}
             </option>
           ))}
+        </select>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">Client type</label>
+        <select
+          value={stage}
+          onChange={(e) => setStage(e.target.value as ClientStage)}
+          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+        >
+          <option value="new">New — 90-day sprint (manual tasks + Monthly Reports)</option>
+          <option value="legacy">Legacy — ongoing (crawl audits)</option>
         </select>
       </div>
 
