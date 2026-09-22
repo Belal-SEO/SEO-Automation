@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,15 @@ const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
+const UNASSIGNED = "__unassigned__";
+
 function TaskRow({ task }: { task: Issue }) {
   const router = useRouter();
   const [status, setStatus] = useState<IssueStatus>(task.status);
+  const [severity, setSeverity] = useState<IssueSeverity>(task.severity);
   const [assignedTo, setAssignedTo] = useState(task.assignedTo ?? "");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"status" | "assignee" | "note" | null>(null);
+  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | null>(null);
 
   async function handleStatusChange(newStatus: IssueStatus) {
     setStatus(newStatus);
@@ -50,6 +53,15 @@ function TaskRow({ task }: { task: Issue }) {
     if (newStatus === "fixed") {
       await syncFixedIssueToReport(supabase, task);
     }
+    setBusy(null);
+    router.refresh();
+  }
+
+  async function handleSeverityChange(newSeverity: IssueSeverity) {
+    setSeverity(newSeverity);
+    setBusy("severity");
+    const supabase = createClient();
+    await supabase.from("issues").update({ severity: newSeverity }).eq("id", task.id);
     setBusy(null);
     router.refresh();
   }
@@ -86,8 +98,21 @@ function TaskRow({ task }: { task: Issue }) {
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <SeverityBadge severity={task.severity} />
+            <div className="flex flex-wrap items-center gap-2">
+              <SeverityBadge severity={severity} />
+              <select
+                value={severity}
+                onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
+                disabled={busy === "severity"}
+                aria-label="Priority"
+                className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+              >
+                {SEVERITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
               <span className="text-xs text-muted-foreground">Added {formatDate(task.detectedAt)}</span>
             </div>
             <p className="text-sm">{task.description}</p>
@@ -147,6 +172,22 @@ export function SprintTasksBoard({
   const [severity, setSeverity] = useState<IssueSeverity>("medium");
   const [assignedTo, setAssignedTo] = useState("");
   const [creating, setCreating] = useState(false);
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
+
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const t of tasks) if (t.assignedTo) names.add(t.assignedTo);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
+
+  const filteredTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          filterAssignee === "all" || (filterAssignee === UNASSIGNED ? !t.assignedTo : t.assignedTo === filterAssignee),
+      ),
+    [tasks, filterAssignee],
+  );
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -206,11 +247,33 @@ export function SprintTasksBoard({
       {tasks.length === 0 ? (
         <EmptyState title="No tasks yet" description="Add the first sprint task above." />
       ) : (
-        <div className="space-y-3">
-          {tasks.map((task) => (
-            <TaskRow key={task.id} task={task} />
-          ))}
-        </div>
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-xs text-muted-foreground">Assignee</span>
+            <select
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="all">All</option>
+              <option value={UNASSIGNED}>Unassigned</option>
+              {assigneeOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {filteredTasks.length === 0 ? (
+            <EmptyState title="No matching tasks" description="Try a different assignee filter." />
+          ) : (
+            <div className="space-y-3">
+              {filteredTasks.map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

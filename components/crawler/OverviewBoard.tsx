@@ -31,19 +31,29 @@ function categoryType(category: IssueCategory): IssueType {
   return "seo";
 }
 
+const UNASSIGNED = "__unassigned__";
+
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
   { value: "open", label: "Not started" },
   { value: "in_progress", label: "In progress" },
   { value: "fixed", label: "Completed" },
 ];
 
+const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
+
 function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string }) {
   const router = useRouter();
   const [status, setStatus] = useState<IssueStatus>(issue.status);
+  const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
   const [isExecutable, setIsExecutable] = useState(issue.isExecutable);
   const [assignedTo, setAssignedTo] = useState(issue.assignedTo ?? "");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"status" | "assignee" | "note" | "executable" | null>(null);
+  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | "executable" | null>(null);
 
   async function handleStatusChange(newStatus: IssueStatus) {
     setStatus(newStatus);
@@ -62,6 +72,15 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
     if (newStatus === "fixed") {
       await syncFixedIssueToReport(supabase, issue);
     }
+    setBusy(null);
+    router.refresh();
+  }
+
+  async function handleSeverityChange(newSeverity: IssueSeverity) {
+    setSeverity(newSeverity);
+    setBusy("severity");
+    const supabase = createClient();
+    await supabase.from("issues").update({ severity: newSeverity }).eq("id", issue.id);
     setBusy(null);
     router.refresh();
   }
@@ -120,7 +139,20 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
               <Link href={`/clients/${issue.clientId}`} className="text-xs font-semibold hover:underline">
                 {clientBrand}
               </Link>
-              <SeverityBadge severity={issue.severity} />
+              <SeverityBadge severity={severity} />
+              <select
+                value={severity}
+                onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
+                disabled={busy === "severity"}
+                aria-label="Priority"
+                className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+              >
+                {SEVERITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
               <span className="text-xs text-muted-foreground">{ISSUE_CATEGORY_LABELS[issue.category]}</span>
               {isExecutable && (
                 <Badge className="border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
@@ -191,8 +223,15 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<IssueStatus | "all">("open");
   const [type, setType] = useState<IssueType>("all");
+  const [assignee, setAssignee] = useState<string>("all");
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c.brand])), [clients]);
+
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const i of issues) if (i.assignedTo) names.add(i.assignedTo);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [issues]);
 
   const filtered = useMemo(() => {
     return issues
@@ -200,8 +239,9 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
       .filter((i) => clientId === "all" || i.clientId === clientId)
       .filter((i) => status === "all" || i.status === status)
       .filter((i) => type === "all" || categoryType(i.category) === type)
+      .filter((i) => assignee === "all" || (assignee === UNASSIGNED ? !i.assignedTo : i.assignedTo === assignee))
       .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-  }, [issues, severity, clientId, status, type]);
+  }, [issues, severity, clientId, status, type, assignee]);
 
   return (
     <div className="space-y-4">
@@ -259,6 +299,22 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
             <option value="open">Not started</option>
             <option value="in_progress">In progress</option>
             <option value="fixed">Completed</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Assignee</span>
+          <select
+            value={assignee}
+            onChange={(e) => setAssignee(e.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            <option value="all">All</option>
+            <option value={UNASSIGNED}>Unassigned</option>
+            {assigneeOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
           </select>
         </label>
         <span className="text-xs text-muted-foreground">
