@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
-import type { IssueSeverity } from "@/lib/types";
+import type { IssueCategory, IssueSeverity } from "@/lib/types";
 
 type SupabaseDb = SupabaseClient<Database>;
 
@@ -114,28 +114,58 @@ export async function getOrCreateManualAuditId(supabase: SupabaseDb, clientId: s
   return created.id;
 }
 
+export interface AddManualIssueInput {
+  description: string;
+  severity: IssueSeverity;
+  category: IssueCategory;
+  assignedTo: string | null;
+}
+
+/** Adds one hand-entered/imported issue -- shows up in Overview/Executables like any other issue. */
+export async function addManualIssue(
+  supabase: SupabaseDb,
+  clientId: string,
+  clientDomain: string,
+  input: AddManualIssueInput,
+): Promise<void> {
+  return addManualIssues(supabase, clientId, clientDomain, [input]);
+}
+
+/** Bulk version of addManualIssue -- one audit lookup and one insert for the whole batch (used by report import). */
+export async function addManualIssues(
+  supabase: SupabaseDb,
+  clientId: string,
+  clientDomain: string,
+  inputs: AddManualIssueInput[],
+): Promise<void> {
+  if (inputs.length === 0) return;
+  const auditId = await getOrCreateManualAuditId(supabase, clientId);
+  const { error } = await supabase.from("issues").insert(
+    inputs.map((input) => ({
+      audit_id: auditId,
+      client_id: clientId,
+      category: input.category,
+      severity: input.severity,
+      url: clientDomain,
+      description: input.description,
+      assigned_to: input.assignedTo,
+    })),
+  );
+  if (error) throw error;
+}
+
 export interface AddSprintTaskInput {
   description: string;
   severity: IssueSeverity;
   assignedTo: string | null;
 }
 
-/** Adds a hand-entered sprint task as an issue (category sprint_task) -- shows up in Overview/Executables like any other issue. */
+/** Adds a hand-entered sprint task as an issue (category sprint_task) -- thin wrapper over addManualIssue for new-stage clients. */
 export async function addSprintTask(
   supabase: SupabaseDb,
   clientId: string,
   clientDomain: string,
   input: AddSprintTaskInput,
 ): Promise<void> {
-  const auditId = await getOrCreateManualAuditId(supabase, clientId);
-  const { error } = await supabase.from("issues").insert({
-    audit_id: auditId,
-    client_id: clientId,
-    category: "sprint_task",
-    severity: input.severity,
-    url: clientDomain,
-    description: input.description,
-    assigned_to: input.assignedTo,
-  });
-  if (error) throw error;
+  return addManualIssue(supabase, clientId, clientDomain, { ...input, category: "sprint_task" });
 }

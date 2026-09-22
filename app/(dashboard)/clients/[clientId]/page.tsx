@@ -16,6 +16,7 @@ import { AuditInstructionsSettings } from "@/components/crawler/AuditInstruction
 import { WpRemoteSecurityPanel } from "@/components/crawler/WpRemoteSecurityPanel";
 import { SprintStatusPanel } from "@/components/crawler/SprintStatusPanel";
 import { SprintTasksBoard } from "@/components/crawler/SprintTasksBoard";
+import { ImportReportPanel } from "@/components/crawler/ImportReportPanel";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { formatDate } from "@/lib/utils";
 
@@ -194,6 +195,15 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </Card>
         </>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Import audit report</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ImportReportPanel clientId={client.id} clientDomain={client.domain} isNew={isNew} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
