@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeverityBadge } from "@/components/crawler/SeverityBadge";
 import { EmptyState } from "@/components/crawler/EmptyState";
+import { CompletedTasksHistory } from "@/components/crawler/CompletedTasksHistory";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 import { addSprintTask } from "@/lib/clientStage";
@@ -34,7 +35,15 @@ function TaskRow({ task }: { task: Issue }) {
   const [severity, setSeverity] = useState<IssueSeverity>(task.severity);
   const [assignedTo, setAssignedTo] = useState(task.assignedTo ?? "");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | null>(null);
+  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | "delete" | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this task? This can't be undone.")) return;
+    setBusy("delete");
+    const supabase = createClient();
+    await supabase.from("issues").delete().eq("id", task.id);
+    router.refresh();
+  }
 
   async function handleStatusChange(newStatus: IssueStatus) {
     setStatus(newStatus);
@@ -117,18 +126,23 @@ function TaskRow({ task }: { task: Issue }) {
             </div>
             <p className="text-sm">{task.description}</p>
           </div>
-          <select
-            value={status}
-            onChange={(e) => handleStatusChange(e.target.value as IssueStatus)}
-            disabled={busy === "status"}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={status}
+              onChange={(e) => handleStatusChange(e.target.value as IssueStatus)}
+              disabled={busy === "status"}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+              {busy === "delete" ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -174,19 +188,22 @@ export function SprintTasksBoard({
   const [creating, setCreating] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
 
+  const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "fixed"), [tasks]);
+  const completedTasks = useMemo(() => tasks.filter((t) => t.status === "fixed"), [tasks]);
+
   const assigneeOptions = useMemo(() => {
     const names = new Set<string>();
-    for (const t of tasks) if (t.assignedTo) names.add(t.assignedTo);
+    for (const t of activeTasks) if (t.assignedTo) names.add(t.assignedTo);
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [tasks]);
+  }, [activeTasks]);
 
   const filteredTasks = useMemo(
     () =>
-      tasks.filter(
+      activeTasks.filter(
         (t) =>
           filterAssignee === "all" || (filterAssignee === UNASSIGNED ? !t.assignedTo : t.assignedTo === filterAssignee),
       ),
-    [tasks, filterAssignee],
+    [activeTasks, filterAssignee],
   );
 
   async function handleCreate(e: React.FormEvent) {
@@ -244,8 +261,8 @@ export function SprintTasksBoard({
         </Button>
       </form>
 
-      {tasks.length === 0 ? (
-        <EmptyState title="No tasks yet" description="Add the first sprint task above." />
+      {activeTasks.length === 0 ? (
+        <EmptyState title="No active tasks" description="Add the first sprint task above." />
       ) : (
         <>
           <label className="flex items-center gap-2 text-sm">
@@ -275,6 +292,11 @@ export function SprintTasksBoard({
           )}
         </>
       )}
+
+      <div className="space-y-3 border-t border-border pt-6">
+        <h3 className="text-sm font-semibold">Completed tasks</h3>
+        <CompletedTasksHistory tasks={completedTasks} />
+      </div>
     </div>
   );
 }

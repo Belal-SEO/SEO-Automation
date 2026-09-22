@@ -14,6 +14,10 @@ export function formatDate(iso: string | null): string {
   });
 }
 
+export function formatMonthYear(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long" });
+}
+
 export function daysSince(iso: string | null): number | null {
   if (!iso) return null;
   const ms = Date.now() - new Date(iso).getTime();

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { SeverityBadge } from "@/components/crawler/SeverityBadge";
 import { EmptyState } from "@/components/crawler/EmptyState";
+import { CompletedTasksHistory } from "@/components/crawler/CompletedTasksHistory";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
@@ -39,7 +40,15 @@ function IssueRow({
   const router = useRouter();
   const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
   const [assignedTo, setAssignedTo] = useState(issue.assignedTo ?? "");
-  const [busy, setBusy] = useState<"severity" | "assignee" | null>(null);
+  const [busy, setBusy] = useState<"severity" | "assignee" | "delete" | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this issue? This can't be undone.")) return;
+    setBusy("delete");
+    const supabase = createClient();
+    await supabase.from("issues").delete().eq("id", issue.id);
+    router.refresh();
+  }
 
   async function handleSeverityChange(newSeverity: IssueSeverity) {
     setSeverity(newSeverity);
@@ -116,6 +125,11 @@ function IssueRow({
         />
       </Td>
       <Td className="text-muted-foreground">{formatDate(issue.detectedAt)}</Td>
+      <Td>
+        <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+          {busy === "delete" ? "Deleting…" : "Delete"}
+        </Button>
+      </Td>
     </Tr>
   );
 }
@@ -128,19 +142,22 @@ export function IssueTable({ issues }: { issues: Issue[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
 
+  const activeIssues = useMemo(() => issues.filter((i) => i.status !== "fixed"), [issues]);
+  const completedIssues = useMemo(() => issues.filter((i) => i.status === "fixed"), [issues]);
+
   const assigneeOptions = useMemo(() => {
     const names = new Set<string>();
-    for (const i of issues) if (i.assignedTo) names.add(i.assignedTo);
+    for (const i of activeIssues) if (i.assignedTo) names.add(i.assignedTo);
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [issues]);
+  }, [activeIssues]);
 
   const filtered = useMemo(() => {
-    return issues
+    return activeIssues
       .filter((i) => category === "all" || i.category === category)
       .filter((i) => status === "all" || i.status === status)
       .filter((i) => assignee === "all" || (assignee === UNASSIGNED ? !i.assignedTo : i.assignedTo === assignee))
       .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-  }, [issues, category, status, assignee]);
+  }, [activeIssues, category, status, assignee]);
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -212,7 +229,6 @@ export function IssueTable({ issues }: { issues: Issue[] }) {
               <option value="all">All</option>
               <option value="open">Open</option>
               <option value="in_progress">In progress</option>
-              <option value="fixed">Fixed</option>
             </select>
           </label>
           <label className="flex items-center gap-2">
@@ -253,6 +269,7 @@ export function IssueTable({ issues }: { issues: Issue[] }) {
               <Th>Status</Th>
               <Th>Assigned to</Th>
               <Th>Detected</Th>
+              <Th />
             </Tr>
           </Thead>
           <Tbody>
@@ -267,6 +284,11 @@ export function IssueTable({ issues }: { issues: Issue[] }) {
           </Tbody>
         </Table>
       )}
+
+      <div className="space-y-3 border-t border-border pt-6">
+        <h3 className="text-sm font-semibold">Completed issues</h3>
+        <CompletedTasksHistory tasks={completedIssues} showCategory />
+      </div>
     </div>
   );
 }

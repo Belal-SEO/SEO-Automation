@@ -32,7 +32,15 @@ function ExecutableRow({ issue }: { issue: Issue }) {
   const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
   const [assignedTo, setAssignedTo] = useState(issue.assignedTo ?? "");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | "remove" | null>(null);
+  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | "remove" | "delete" | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this task? This can't be undone.")) return;
+    setBusy("delete");
+    const supabase = createClient();
+    await supabase.from("issues").delete().eq("id", issue.id);
+    router.refresh();
+  }
 
   async function handleStatusChange(newStatus: IssueStatus) {
     setStatus(newStatus);
@@ -157,6 +165,9 @@ function ExecutableRow({ issue }: { issue: Issue }) {
             </select>
             <Button size="sm" variant="ghost" onClick={handleRemove} disabled={busy === "remove"}>
               Remove
+            </Button>
+            <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+              {busy === "delete" ? "Deleting…" : "Delete"}
             </Button>
           </div>
         </div>
