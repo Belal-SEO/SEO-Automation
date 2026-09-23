@@ -38,6 +38,8 @@ export default async function ClientsPage() {
         </p>
       </div>
 
+      <OverviewSummaryCard summary={issueSummary} />
+
       <Card>
         <CardHeader>
           <CardTitle>New clients — 90-day sprint</CardTitle>
@@ -72,8 +74,6 @@ export default async function ClientsPage() {
           )}
         </CardContent>
       </Card>
-
-      <OverviewSummaryCard summary={issueSummary} />
 
       <Card>
         <CardHeader>
