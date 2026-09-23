@@ -133,3 +133,7 @@ export interface ClientRosterRow extends Client {
   latestReportStatus: ReportStatus | "overdue" | "none";
 }
 
+export interface IssueSeveritySummary {
+  total: number;
+  bySeverity: Record<IssueSeverity, number>;
+}
