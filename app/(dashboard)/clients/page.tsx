@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { fetchClientRoster, fetchOpenIssueSeveritySummary } from "@/lib/queries";
+import { fetchClientRoster, mapIssue } from "@/lib/queries";
 import { fetchSprintTaskCompletionByClient } from "@/lib/clientStage";
 import { ClientRosterTable } from "@/components/crawler/ClientRosterTable";
 import { NewClientSprintTable } from "@/components/crawler/NewClientSprintTable";
 import { ClientForm } from "@/components/crawler/ClientForm";
 import { EmptyState } from "@/components/crawler/EmptyState";
-import { OverviewSummaryCard } from "@/components/crawler/OverviewSummaryCard";
+import { OverviewBoard } from "@/components/crawler/OverviewBoard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +17,13 @@ export default async function ClientsPage() {
 
   const supabase = createClient();
   const roster = await fetchClientRoster(supabase);
-  const issueSummary = await fetchOpenIssueSeveritySummary(
-    supabase,
-    roster.map((c) => c.id),
-  );
+  const clientIds = roster.map((c) => c.id);
+
+  const { data: issueRows } =
+    clientIds.length > 0
+      ? await supabase.from("issues").select("*").in("client_id", clientIds).order("detected_at", { ascending: false })
+      : { data: [] as never[] };
+  const issues = (issueRows ?? []).map(mapIssue);
 
   const newClients = roster.filter((c) => c.stage === "new");
   const legacyClients = roster.filter((c) => c.stage === "legacy");
@@ -37,6 +40,23 @@ export default async function ClientsPage() {
           Who&apos;s due for a crawl, who has open issues, and who&apos;s waiting on a report.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Overview</CardTitle>
+          <CardDescription>
+            Every issue across every client, in one queue — filter by priority or client, assign it, and track it
+            through to done.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {issues.length === 0 ? (
+            <EmptyState title="No issues yet" description="Run an audit on a client to start surfacing issues here." />
+          ) : (
+            <OverviewBoard issues={issues} clients={roster} />
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -72,8 +92,6 @@ export default async function ClientsPage() {
           )}
         </CardContent>
       </Card>
-
-      <OverviewSummaryCard summary={issueSummary} />
 
       <Card>
         <CardHeader>
