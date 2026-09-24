@@ -297,6 +297,10 @@ export interface Database {
           organic_clicks: number;
           indexed_pages: number;
           total_backlinks: number;
+          sitemap_submitted: boolean | null;
+          sitemap_page_count: number | null;
+          top_pages: unknown;
+          generative_engine_appearances: number;
           captured_range_start: string | null;
           captured_range_end: string | null;
           created_at: string;
@@ -309,6 +313,10 @@ export interface Database {
           organic_clicks?: number;
           indexed_pages?: number;
           total_backlinks?: number;
+          sitemap_submitted?: boolean | null;
+          sitemap_page_count?: number | null;
+          top_pages?: unknown;
+          generative_engine_appearances?: number;
           captured_range_start?: string | null;
           captured_range_end?: string | null;
           created_at?: string;

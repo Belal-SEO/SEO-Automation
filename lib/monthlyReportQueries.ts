@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import type {
   Baseline,
+  BaselineTopPage,
   MonthlyReport,
   MonthlyReportEmailDraft,
   MonthlyReportMetric,
@@ -30,6 +31,18 @@ export function mapMonthlyReportSettings(row: Row<"monthly_report_settings">): M
   };
 }
 
+function parseTopPages(value: unknown): BaselineTopPage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is Record<string, unknown> => v !== null && typeof v === "object")
+    .map((v) => ({
+      url: typeof v.url === "string" ? v.url : "",
+      clicks: typeof v.clicks === "number" ? v.clicks : 0,
+      impressions: typeof v.impressions === "number" ? v.impressions : 0,
+    }))
+    .filter((p) => p.url);
+}
+
 export function mapBaseline(row: Row<"baselines">): Baseline {
   return {
     id: row.id,
@@ -38,6 +51,10 @@ export function mapBaseline(row: Row<"baselines">): Baseline {
     organicClicks: row.organic_clicks,
     indexedPages: row.indexed_pages,
     totalBacklinks: row.total_backlinks,
+    sitemapSubmitted: row.sitemap_submitted,
+    sitemapPageCount: row.sitemap_page_count,
+    topPages: parseTopPages(row.top_pages),
+    generativeEngineAppearances: row.generative_engine_appearances,
     capturedRangeStart: row.captured_range_start,
     capturedRangeEnd: row.captured_range_end,
     createdAt: row.created_at,

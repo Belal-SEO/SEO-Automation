@@ -17,6 +17,12 @@ export interface MonthlyReportSettings {
   updatedAt: string;
 }
 
+export interface BaselineTopPage {
+  url: string;
+  clicks: number;
+  impressions: number;
+}
+
 export interface Baseline {
   id: string;
   clientId: string;
@@ -24,6 +30,13 @@ export interface Baseline {
   organicClicks: number;
   indexedPages: number;
   totalBacklinks: number;
+  // Auto-filled by "Import from Search Console" -- see lib/baselineImport.ts.
+  sitemapSubmitted: boolean | null;
+  sitemapPageCount: number | null;
+  topPages: BaselineTopPage[];
+  // Manual only -- Google exposes neither of these via any Search Console
+  // API, only in the Console UI (Index Coverage report / AI Overviews filter).
+  generativeEngineAppearances: number;
   capturedRangeStart: string | null;
   capturedRangeEnd: string | null;
   createdAt: string;

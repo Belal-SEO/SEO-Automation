@@ -120,6 +120,34 @@ export function fetchGscTopPages(
   return fetchGscTop(siteUrl, startDate, endDate, "page", limit);
 }
 
+export interface GscSitemapInfo {
+  submitted: boolean;
+  pageCount: number;
+}
+
+/**
+ * Whether any sitemap is submitted, and total URLs across all submitted
+ * sitemaps' `contents[].submitted` counts. Deliberately does NOT use
+ * `contents[].indexed` -- Google's own API docs mark that field deprecated
+ * and it's been reported to sit at 0 for months even on indexed sites.
+ */
+export async function fetchGscSitemapInfo(siteUrl: string): Promise<GscSitemapInfo> {
+  const auth = await getGscOAuthClient();
+  const webmasters = google.webmasters({ version: "v3", auth });
+
+  const res = await webmasters.sitemaps.list({ siteUrl });
+  const sitemaps = res.data.sitemap ?? [];
+
+  let pageCount = 0;
+  for (const sitemap of sitemaps) {
+    for (const content of sitemap.contents ?? []) {
+      pageCount += Number(content.submitted ?? 0);
+    }
+  }
+
+  return { submitted: sitemaps.length > 0, pageCount };
+}
+
 export interface BacklinkItem {
   source: string;
   target: string;

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapAudit, mapClient, mapIssue, mapMetricSnapshot, mapReport } from "@/lib/queries";
+import { mapBaseline } from "@/lib/monthlyReportQueries";
 import { computeSprintTaskCompletion } from "@/lib/clientStage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AuditTriggerButton } from "@/components/crawler/AuditTriggerButton";
@@ -16,6 +17,7 @@ import { AuditInstructionsSettings } from "@/components/crawler/AuditInstruction
 import { WpRemoteSecurityPanel } from "@/components/crawler/WpRemoteSecurityPanel";
 import { SprintStatusPanel } from "@/components/crawler/SprintStatusPanel";
 import { SprintTasksBoard } from "@/components/crawler/SprintTasksBoard";
+import { BaselineSummaryCard } from "@/components/crawler/BaselineSummaryCard";
 import { ImportReportPanel } from "@/components/crawler/ImportReportPanel";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { formatDate } from "@/lib/utils";
@@ -62,20 +64,26 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
   );
 
   const auditIds = audits.map((a) => a.id);
-  const [{ data: issueRows }, { data: metricRows }, sprintCompletion] = await Promise.all([
-    auditIds.length > 0
-      ? supabase.from("issues").select("*").in("audit_id", auditIds)
-      : Promise.resolve({ data: [] as never[] }),
-    supabase
-      .from("metric_snapshots")
-      .select("*")
-      .eq("client_id", client.id)
-      .order("captured_at", { ascending: true }),
-    isNew ? computeSprintTaskCompletion(supabase, client.id) : Promise.resolve(null),
-  ]);
+  const [{ data: issueRows }, { data: metricRows }, sprintCompletion, { data: settingsRow }, { data: baselineRow }] =
+    await Promise.all([
+      auditIds.length > 0
+        ? supabase.from("issues").select("*").in("audit_id", auditIds)
+        : Promise.resolve({ data: [] as never[] }),
+      supabase
+        .from("metric_snapshots")
+        .select("*")
+        .eq("client_id", client.id)
+        .order("captured_at", { ascending: true }),
+      isNew ? computeSprintTaskCompletion(supabase, client.id) : Promise.resolve(null),
+      isNew
+        ? supabase.from("monthly_report_settings").select("gsc_site_url").eq("client_id", client.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      isNew ? supabase.from("baselines").select("*").eq("client_id", client.id).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
 
   const issues = (issueRows ?? []).map(mapIssue);
   const metricSnapshots = (metricRows ?? []).map(mapMetricSnapshot);
+  const baseline = baselineRow ? mapBaseline(baselineRow) : null;
   const fixedIssues = issues.filter((i) => i.status === "fixed");
   const sprintTasks = issues
     .filter((i) => i.category === "sprint_task")
@@ -118,6 +126,10 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
             <SprintStatusPanel client={client} completion={sprintCompletion} />
           </CardContent>
         </Card>
+      )}
+
+      {isNew && (
+        <BaselineSummaryCard clientId={client.id} gscSiteUrl={settingsRow?.gsc_site_url ?? null} baseline={baseline} />
       )}
 
       {!isNew && inProgressAudit && (
