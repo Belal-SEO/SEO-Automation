@@ -269,6 +269,26 @@ export interface Database {
           },
         ];
       };
+      google_oauth_tokens: {
+        Row: {
+          id: string;
+          encrypted_refresh_token: string;
+          google_account_email: string | null;
+          scope: string | null;
+          connected_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          encrypted_refresh_token: string;
+          google_account_email?: string | null;
+          scope?: string | null;
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["google_oauth_tokens"]["Insert"]>;
+        Relationships: [];
+      };
       baselines: {
         Row: {
           id: string;

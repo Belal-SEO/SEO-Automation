@@ -8,15 +8,22 @@ import { NewClientSprintTable } from "@/components/crawler/NewClientSprintTable"
 import { ClientForm } from "@/components/crawler/ClientForm";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { OverviewSummaryCard } from "@/components/crawler/OverviewSummaryCard";
+import { GscConnectionCard } from "@/components/crawler/GscConnectionCard";
+import { getGscConnectionStatus } from "@/lib/gscAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: { gsc_connected?: string; gsc_error?: string };
+}) {
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
   const roster = await fetchClientRoster(supabase);
+  const gscStatus = await getGscConnectionStatus();
   const issueSummary = await fetchOpenIssueSeveritySummary(
     supabase,
     roster.map((c) => c.id),
@@ -37,6 +44,17 @@ export default async function ClientsPage() {
           Who&apos;s due for a crawl, who has open issues, and who&apos;s waiting on a report.
         </p>
       </div>
+
+      {searchParams.gsc_connected && (
+        <p className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+          Search Console connected.
+        </p>
+      )}
+      {searchParams.gsc_error && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          Search Console connection failed: {searchParams.gsc_error}
+        </p>
+      )}
 
       <OverviewSummaryCard summary={issueSummary} />
 
@@ -74,6 +92,8 @@ export default async function ClientsPage() {
           )}
         </CardContent>
       </Card>
+
+      <GscConnectionCard status={gscStatus} />
 
       <Card>
         <CardHeader>

@@ -10,6 +10,9 @@ import { EmptyState } from "@/components/crawler/EmptyState";
 import { MonthlyReportSettingsForm } from "@/components/monthlyreport/MonthlyReportSettingsForm";
 import { BaselineForm } from "@/components/monthlyreport/BaselineForm";
 import { NewMonthlyReportForm } from "@/components/monthlyreport/NewMonthlyReportForm";
+import { GscTrendChart } from "@/components/monthlyreport/GscTrendChart";
+import { GscTopTable } from "@/components/monthlyreport/GscTopTable";
+import { fetchGscTrend, fetchGscTopQueries, fetchGscTopPages, type GscTrendPoint, type GscTopItem } from "@/lib/googleReporting";
 import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +45,31 @@ export default async function ClientMonthlyReportsPage({ params }: { params: { c
   const baseline = baselineRow ? mapBaseline(baselineRow) : null;
   const reports = (reportRows ?? []).map(mapMonthlyReport);
 
+  let gscTrend: GscTrendPoint[] = [];
+  let gscTopQueries: GscTopItem[] = [];
+  let gscTopPages: GscTopItem[] = [];
+  let gscError: string | null = null;
+
+  if (settings?.gscSiteUrl) {
+    // GSC data typically lags 2-3 days, so the window ends a few days back.
+    const end = new Date();
+    end.setUTCDate(end.getUTCDate() - 3);
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 27);
+    const endDate = end.toISOString().slice(0, 10);
+    const startDate = start.toISOString().slice(0, 10);
+
+    try {
+      [gscTrend, gscTopQueries, gscTopPages] = await Promise.all([
+        fetchGscTrend(settings.gscSiteUrl, startDate, endDate),
+        fetchGscTopQueries(settings.gscSiteUrl, startDate, endDate),
+        fetchGscTopPages(settings.gscSiteUrl, startDate, endDate),
+      ]);
+    } catch (err) {
+      gscError = err instanceof Error ? err.message : "Failed to load Search Console data.";
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -58,6 +86,32 @@ export default async function ClientMonthlyReportsPage({ params }: { params: { c
           <MonthlyReportSettingsForm clientId={client.id} settings={settings} />
         </CardContent>
       </Card>
+
+      {settings?.gscSiteUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Search Console (last 28 days)</CardTitle>
+            <CardDescription>{settings.gscSiteUrl}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {gscError ? (
+              <EmptyState title="Couldn't load Search Console data" description={gscError} />
+            ) : (
+              <>
+                <GscTrendChart points={gscTrend} />
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold">Top queries</h3>
+                  <GscTopTable items={gscTopQueries} labelHeader="Query" />
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold">Top pages</h3>
+                  <GscTopTable items={gscTopPages} labelHeader="Page" />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

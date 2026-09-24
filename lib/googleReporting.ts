@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { getOAuthClient } from "@/lib/google";
+import { getGscOAuthClient } from "@/lib/gscAuth";
 
 export interface GscTotals {
   impressions: number;
@@ -7,17 +8,17 @@ export interface GscTotals {
 }
 
 /**
- * Pulls aggregate impressions/clicks for a date range from Search Console.
- * Requires the shared Google refresh token to have been granted the
- * `webmasters.readonly` scope (see README) -- otherwise this throws and the
- * caller should fall back to manual entry, never block the report.
+ * Pulls aggregate impressions/clicks for a date range from Search Console,
+ * via the dedicated GSC connection (see lib/gscAuth.ts) -- throws if it
+ * isn't connected yet, and the caller should fall back to manual entry,
+ * never block the report.
  */
 export async function fetchGscTotals(
   siteUrl: string,
   startDate: string,
   endDate: string,
 ): Promise<GscTotals> {
-  const auth = getOAuthClient();
+  const auth = await getGscOAuthClient();
   const webmasters = google.webmasters({ version: "v3", auth });
 
   const res = await webmasters.searchanalytics.query({
@@ -34,6 +35,89 @@ export async function fetchGscTotals(
     impressions: row?.impressions ?? 0,
     clicks: row?.clicks ?? 0,
   };
+}
+
+export interface GscTrendPoint {
+  date: string;
+  clicks: number;
+  impressions: number;
+}
+
+/** Daily clicks/impressions for a date range, for a trend chart. */
+export async function fetchGscTrend(siteUrl: string, startDate: string, endDate: string): Promise<GscTrendPoint[]> {
+  const auth = await getGscOAuthClient();
+  const webmasters = google.webmasters({ version: "v3", auth });
+
+  const res = await webmasters.searchanalytics.query({
+    siteUrl,
+    requestBody: { startDate, endDate, dimensions: ["date"] },
+  });
+
+  return (res.data.rows ?? [])
+    .map((row) => ({
+      date: row.keys?.[0] ?? "",
+      clicks: row.clicks ?? 0,
+      impressions: row.impressions ?? 0,
+    }))
+    .filter((point) => point.date)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface GscTopItem {
+  label: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+async function fetchGscTop(
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  dimension: "query" | "page",
+  limit: number,
+): Promise<GscTopItem[]> {
+  const auth = await getGscOAuthClient();
+  const webmasters = google.webmasters({ version: "v3", auth });
+
+  const res = await webmasters.searchanalytics.query({
+    siteUrl,
+    requestBody: {
+      startDate,
+      endDate,
+      dimensions: [dimension],
+      rowLimit: limit,
+    },
+  });
+
+  return (res.data.rows ?? []).map((row) => ({
+    label: row.keys?.[0] ?? "",
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: row.ctr ?? 0,
+    position: row.position ?? 0,
+  }));
+}
+
+/** Top search queries by clicks for a date range. */
+export function fetchGscTopQueries(
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  limit = 10,
+): Promise<GscTopItem[]> {
+  return fetchGscTop(siteUrl, startDate, endDate, "query", limit);
+}
+
+/** Top landing pages by clicks for a date range. */
+export function fetchGscTopPages(
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  limit = 10,
+): Promise<GscTopItem[]> {
+  return fetchGscTop(siteUrl, startDate, endDate, "page", limit);
 }
 
 export interface BacklinkItem {
