@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/crawler/SeverityBadge";
 import { EmptyState } from "@/components/crawler/EmptyState";
@@ -50,12 +49,9 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
   const router = useRouter();
   const [status, setStatus] = useState<IssueStatus>(issue.status);
   const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
-  const [isExecutable, setIsExecutable] = useState(issue.isExecutable);
   const [assignedTo, setAssignedTo] = useState(issue.assignedTo ?? "");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | "executable" | "delete" | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<"status" | "severity" | "assignee" | "note" | "delete" | null>(null);
 
   async function handleDelete() {
     if (!window.confirm("Delete this task? This can't be undone.")) return;
@@ -122,24 +118,6 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
     router.refresh();
   }
 
-  async function handleToggleExecutable() {
-    setBusy("executable");
-    const supabase = createClient();
-    const next = !isExecutable;
-    await supabase
-      .from("issues")
-      .update({ is_executable: next, executable_added_at: next ? new Date().toISOString() : issue.executableAddedAt })
-      .eq("id", issue.id);
-    await supabase.from("issue_activity").insert({
-      issue_id: issue.id,
-      client_id: issue.clientId,
-      activity_type: next ? "added_to_executables" : "removed_from_executables",
-    });
-    setIsExecutable(next);
-    setBusy(null);
-    router.refresh();
-  }
-
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -164,11 +142,6 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
                 ))}
               </select>
               <span className="text-xs text-muted-foreground">{ISSUE_CATEGORY_LABELS[issue.category]}</span>
-              {isExecutable && (
-                <Badge className="border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
-                  In Executables
-                </Badge>
-              )}
             </div>
             <a
               href={issue.url}
@@ -194,9 +167,6 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
                 </option>
               ))}
             </select>
-            <Button size="sm" variant="ghost" onClick={handleToggleExecutable} disabled={busy === "executable"}>
-              {isExecutable ? "Remove from Executables" : "Add to Executables"}
-            </Button>
             <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
               {busy === "delete" ? "Deleting…" : "Delete"}
             </Button>

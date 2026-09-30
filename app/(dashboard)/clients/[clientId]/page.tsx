@@ -100,12 +100,6 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/clients/${client.id}/executables`}
-            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-          >
-            Executables
-          </Link>
-          <Link
             href={`/clients/${client.id}/monthly-reports`}
             className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
           >

@@ -62,8 +62,6 @@ export function mapIssue(row: Row<"issues">): Issue {
     fixedAt: row.fixed_at,
     beforeScreenshotUrl: row.before_screenshot_url,
     afterScreenshotUrl: row.after_screenshot_url,
-    isExecutable: row.is_executable,
-    executableAddedAt: row.executable_added_at,
     assignedTo: row.assigned_to,
     externalId: row.external_id,
   };

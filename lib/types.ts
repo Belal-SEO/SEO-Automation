@@ -63,13 +63,11 @@ export interface Issue {
   fixedAt: string | null;
   beforeScreenshotUrl: string | null;
   afterScreenshotUrl: string | null;
-  isExecutable: boolean;
-  executableAddedAt: string | null;
   assignedTo: string | null;
   externalId: string | null;
 }
 
-export type IssueActivityType = "note" | "status_change" | "added_to_executables" | "removed_from_executables";
+export type IssueActivityType = "note" | "status_change";
 
 export interface IssueActivity {
   id: string;

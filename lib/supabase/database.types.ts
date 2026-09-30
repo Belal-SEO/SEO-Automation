@@ -90,8 +90,6 @@ export interface Database {
           fixed_at: string | null;
           before_screenshot_url: string | null;
           after_screenshot_url: string | null;
-          is_executable: boolean;
-          executable_added_at: string | null;
           assigned_to: string | null;
           external_id: string | null;
         };
@@ -108,8 +106,6 @@ export interface Database {
           fixed_at?: string | null;
           before_screenshot_url?: string | null;
           after_screenshot_url?: string | null;
-          is_executable?: boolean;
-          executable_added_at?: string | null;
           assigned_to?: string | null;
           external_id?: string | null;
         };
