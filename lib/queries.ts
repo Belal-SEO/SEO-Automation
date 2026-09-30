@@ -44,6 +44,7 @@ export function mapAudit(row: Row<"audits">): Audit {
     source: row.source as Audit["source"],
     status: row.status as Audit["status"],
     error: row.error,
+    model: row.model,
   };
 }
 

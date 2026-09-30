@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
-const bodySchema = z.object({ clientId: z.string().uuid() });
+const bodySchema = z.object({ clientId: z.string().uuid(), model: z.string().min(1).optional() });
 
 /**
  * Triggers a technical crawl for a client. Creates the Audit row and hands
  * off to the `run-crawl` Supabase Edge Function, which does the actual work
- * (self-fetches a handful of same-domain pages, has Claude identify issues,
- * pulls PSI Core Web Vitals) and can run longer than a Vercel serverless
- * function's timeout allows.
+ * (self-fetches a handful of same-domain pages, has a model of your choice
+ * identify issues via OpenRouter, pulls PSI Core Web Vitals) and can run
+ * longer than a Vercel serverless function's timeout allows.
  */
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   const { error: invokeError } = await supabase.functions.invoke("run-crawl", {
-    body: { auditId: audit.id, clientId: client.id, domain: client.domain },
+    body: { auditId: audit.id, clientId: client.id, domain: client.domain, model: parsed.data.model },
   });
 
   if (invokeError) {

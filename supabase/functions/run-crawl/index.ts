@@ -5,11 +5,11 @@
 // service or licensed CLI required), extracts a broad set of on-page local
 // SEO signals (structured data, NAP, canonical/meta/OG tags, image alt
 // coverage, internal linking, robots/sitemap coverage), then hands all of
-// it to Claude to identify and categorize issues. PageSpeed Insights stays
-// independent of the crawl since it needs real user / Lighthouse data that
-// no page fetch can produce.
+// it to a model (selectable per run, routed through OpenRouter — see
+// analyzeWithOpenRouter) to identify and categorize issues. PageSpeed
+// Insights stays independent of the crawl since it needs real user /
+// Lighthouse data that no page fetch can produce.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +20,7 @@ interface RunCrawlPayload {
   auditId: string;
   clientId: string;
   domain: string;
+  model?: string;
 }
 
 interface CrawledPage {
@@ -48,7 +49,6 @@ interface CrawledPage {
 const MAX_PAGES = 25;
 const CONCURRENCY = 5;
 const FETCH_TIMEOUT_MS = 8000;
-const CRAWL_MODEL = "claude-sonnet-5";
 
 async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController();
@@ -229,29 +229,32 @@ async function fetchSiteWideSignals(domain: string) {
 }
 
 const ISSUES_TOOL = {
-  name: "report_issues",
-  description: "Report every technical and local SEO issue found across the crawled site.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      issues: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            category: {
-              type: "string",
-              enum: ["cwv", "broken_link", "page_structure", "indexability", "meta", "local_seo"],
+  type: "function" as const,
+  function: {
+    name: "report_issues",
+    description: "Report every technical and local SEO issue found across the crawled site.",
+    parameters: {
+      type: "object" as const,
+      properties: {
+        issues: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              category: {
+                type: "string",
+                enum: ["cwv", "broken_link", "page_structure", "indexability", "meta", "local_seo"],
+              },
+              severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
+              url: { type: "string" },
+              description: { type: "string" },
             },
-            severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
-            url: { type: "string" },
-            description: { type: "string" },
+            required: ["category", "severity", "url", "description"],
           },
-          required: ["category", "severity", "url", "description"],
         },
       },
+      required: ["issues"],
     },
-    required: ["issues"],
   },
 };
 
@@ -299,45 +302,67 @@ interface ParsedIssue {
   description: string;
 }
 
-async function analyzeWithClaude(
+async function analyzeWithOpenRouter(
   pages: CrawledPage[],
   siteSignals: Awaited<ReturnType<typeof fetchSiteWideSignals>>,
   client: { name: string; brand: string; domain: string; customAuditInstructions: string | null },
+  model: string,
 ): Promise<ParsedIssue[]> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured for this project's Edge Functions.");
+    throw new Error("OPENROUTER_API_KEY is not configured for this project's Edge Functions.");
   }
 
   const systemPrompt = client.customAuditInstructions
     ? `${BASE_AUDIT_SYSTEM_PROMPT}\n\nAdditional instructions specific to this client:\n${client.customAuditInstructions}`
     : BASE_AUDIT_SYSTEM_PROMPT;
 
-  const anthropic = new Anthropic({ apiKey });
-  const message = await anthropic.messages.create({
-    model: CRAWL_MODEL,
-    max_tokens: 8000,
-    system: systemPrompt,
-    tools: [ISSUES_TOOL],
-    tool_choice: { type: "tool", name: "report_issues" },
-    messages: [
-      {
-        role: "user",
-        content: `Client: ${client.name} (${client.brand}), ${client.domain}\n\nSite-wide signals:\n${JSON.stringify(
-          siteSignals,
-          null,
-          2,
-        )}\n\nCrawled page data (${pages.length} pages):\n\n${JSON.stringify(pages, null, 2)}`,
-      },
-    ],
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "X-Title": "SEO Automation Dashboard",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8000,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Client: ${client.name} (${client.brand}), ${client.domain}\n\nSite-wide signals:\n${JSON.stringify(
+            siteSignals,
+            null,
+            2,
+          )}\n\nCrawled page data (${pages.length} pages):\n\n${JSON.stringify(pages, null, 2)}`,
+        },
+      ],
+      tools: [ISSUES_TOOL],
+      tool_choice: { type: "function", function: { name: "report_issues" } },
+    }),
   });
 
-  const toolUse = message.content.find((block) => block.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") {
-    throw new Error("Claude did not return a structured issues report.");
+  if (!res.ok) {
+    const raw = await res.text().catch(() => "");
+    throw new Error(`OpenRouter request failed (${res.status}): ${raw || "no error body"}`);
   }
-  const input = toolUse.input as { issues?: ParsedIssue[] };
-  return input.issues ?? [];
+
+  const data = (await res.json()) as {
+    choices?: { message?: { tool_calls?: { function?: { arguments?: string } }[] } }[];
+  };
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (!toolCall?.function?.arguments) {
+    throw new Error("The model didn't return a structured issues report.");
+  }
+
+  let parsed: { issues?: ParsedIssue[] };
+  try {
+    parsed = JSON.parse(toolCall.function.arguments);
+  } catch {
+    throw new Error("The model's response wasn't valid JSON.");
+  }
+  return parsed.issues ?? [];
 }
 
 Deno.serve(async (req) => {
@@ -360,10 +385,17 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { auditId, clientId, domain } = payload;
+  const { auditId, clientId, domain, model: requestedModel } = payload;
 
   try {
-    await supabase.from("audits").update({ status: "crawling" }).eq("id", auditId);
+    const model = requestedModel || Deno.env.get("OPENROUTER_MODEL");
+    if (!model) {
+      throw new Error(
+        "No model specified and OPENROUTER_MODEL is not configured for this project's Edge Functions.",
+      );
+    }
+
+    await supabase.from("audits").update({ status: "crawling", model }).eq("id", auditId);
 
     const { data: clientRow } = await supabase
       .from("clients")
@@ -376,12 +408,17 @@ Deno.serve(async (req) => {
 
     await supabase.from("audits").update({ status: "analyzing" }).eq("id", auditId);
 
-    const issues = await analyzeWithClaude(pages, siteSignals, {
-      name: clientRow.name,
-      brand: clientRow.brand,
-      domain: clientRow.domain,
-      customAuditInstructions: clientRow.custom_audit_instructions,
-    });
+    const issues = await analyzeWithOpenRouter(
+      pages,
+      siteSignals,
+      {
+        name: clientRow.name,
+        brand: clientRow.brand,
+        domain: clientRow.domain,
+        customAuditInstructions: clientRow.custom_audit_instructions,
+      },
+      model,
+    );
 
     if (issues.length > 0) {
       await supabase.from("issues").insert(

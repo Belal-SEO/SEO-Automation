@@ -161,7 +161,12 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
 
           <Card>
             <CardHeader>
-              <CardTitle>Issues {latestAudit ? `— latest audit (${formatDate(latestAudit.runAt)})` : ""}</CardTitle>
+              <CardTitle>
+                Issues
+                {latestAudit
+                  ? ` — latest audit (${formatDate(latestAudit.runAt)}${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
+                  : ""}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {audits.length === 0 ? (

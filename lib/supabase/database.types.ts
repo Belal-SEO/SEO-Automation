@@ -55,6 +55,7 @@ export interface Database {
           source: string;
           status: string;
           error: string | null;
+          model: string | null;
         };
         Insert: {
           id?: string;
@@ -63,6 +64,7 @@ export interface Database {
           source: string;
           status?: string;
           error?: string | null;
+          model?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["audits"]["Insert"]>;
         Relationships: [

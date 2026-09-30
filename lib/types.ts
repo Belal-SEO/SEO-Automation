@@ -32,6 +32,7 @@ export interface Audit {
   source: AuditSource;
   status: AuditStatus;
   error: string | null;
+  model: string | null;
 }
 
 export type IssueCategory =
