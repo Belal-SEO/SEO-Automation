@@ -9,7 +9,9 @@ import { ClientForm } from "@/components/crawler/ClientForm";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { OverviewSummaryCard } from "@/components/crawler/OverviewSummaryCard";
 import { GscConnectionCard } from "@/components/crawler/GscConnectionCard";
+import { UpcomingMeetingsCard } from "@/components/crawler/UpcomingMeetingsCard";
 import { getGscConnectionStatus } from "@/lib/gscAuth";
+import { fetchMeetingsInRange, getWeekRange, type UpcomingMeeting } from "@/lib/calendarMeetings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,24 @@ export default async function ClientsPage({
     supabase,
     roster.map((c) => c.id),
   );
+
+  let thisWeekMeetings: UpcomingMeeting[] = [];
+  let nextWeekMeetings: UpcomingMeeting[] = [];
+  let meetingsError: string | null = null;
+  const icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
+
+  if (icsUrl) {
+    try {
+      const { start: thisWeekStart } = getWeekRange(0);
+      const { end: nextWeekEnd } = getWeekRange(1);
+      const all = await fetchMeetingsInRange(icsUrl, thisWeekStart, nextWeekEnd);
+      const { end: thisWeekEnd } = getWeekRange(0);
+      thisWeekMeetings = all.filter((m) => m.start < thisWeekEnd);
+      nextWeekMeetings = all.filter((m) => m.start >= thisWeekEnd);
+    } catch (err) {
+      meetingsError = err instanceof Error ? err.message : "Failed to load the calendar.";
+    }
+  }
 
   const newClients = roster.filter((c) => c.stage === "new");
   const legacyClients = roster.filter((c) => c.stage === "legacy");
@@ -54,6 +74,10 @@ export default async function ClientsPage({
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           Search Console connection failed: {searchParams.gsc_error}
         </p>
+      )}
+
+      {icsUrl && (
+        <UpcomingMeetingsCard thisWeek={thisWeekMeetings} nextWeek={nextWeekMeetings} error={meetingsError} />
       )}
 
       <OverviewSummaryCard summary={issueSummary} />
