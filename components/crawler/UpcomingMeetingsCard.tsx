@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { EmptyState } from "@/components/crawler/EmptyState";
+import { TriageClientsColumn } from "@/components/crawler/TriageClientsColumn";
 import { formatMeetingDate } from "@/lib/utils";
 import type { UpcomingMeeting } from "@/lib/calendarMeetings";
+import type { TriageClient } from "@/lib/types";
 
 function MeetingList({ meetings }: { meetings: UpcomingMeeting[] }) {
   if (meetings.length === 0) {
@@ -23,10 +25,12 @@ export function UpcomingMeetingsCard({
   thisWeek,
   nextWeek,
   error,
+  triageClients,
 }: {
   thisWeek: UpcomingMeeting[];
   nextWeek: UpcomingMeeting[];
   error?: string | null;
+  triageClients: TriageClient[];
 }) {
   return (
     <Card>
@@ -35,24 +39,29 @@ export function UpcomingMeetingsCard({
         <CardDescription>From the shared Google Calendar.</CardDescription>
       </CardHeader>
       <CardContent>
-        {error ? (
-          <EmptyState title="Couldn't load the calendar" description={error} />
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                This week
-              </h3>
-              <MeetingList meetings={thisWeek} />
+        <div className="grid gap-6 sm:grid-cols-3">
+          {error ? (
+            <div className="sm:col-span-2">
+              <EmptyState title="Couldn't load the calendar" description={error} />
             </div>
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Next week
-              </h3>
-              <MeetingList meetings={nextWeek} />
-            </div>
-          </div>
-        )}
+          ) : (
+            <>
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  This week
+                </h3>
+                <MeetingList meetings={thisWeek} />
+              </div>
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Next week
+                </h3>
+                <MeetingList meetings={nextWeek} />
+              </div>
+            </>
+          )}
+          <TriageClientsColumn clients={triageClients} />
+        </div>
       </CardContent>
     </Card>
   );

@@ -10,6 +10,7 @@ import type {
   IssueSeveritySummary,
   MetricSnapshot,
   Report,
+  TriageClient,
 } from "@/lib/types";
 
 type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
@@ -210,4 +211,24 @@ export async function fetchCompletedAssignedIssues(
     .lte("fixed_at", `${periodEnd}T23:59:59Z`);
   if (error) throw error;
   return (data ?? []).map(mapIssue);
+}
+
+export function mapTriageClient(row: Row<"triage_clients">): TriageClient {
+  return {
+    id: row.id,
+    clientName: row.client_name,
+    startDate: row.start_date,
+    deadlineDate: row.deadline_date,
+    createdAt: row.created_at,
+  };
+}
+
+/** Manual "Triage Clients" watchlist shown alongside Upcoming meetings. */
+export async function fetchTriageClients(supabase: SupabaseClient<Database>): Promise<TriageClient[]> {
+  const { data, error } = await supabase
+    .from("triage_clients")
+    .select("*")
+    .order("deadline_date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapTriageClient);
 }

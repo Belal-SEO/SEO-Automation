@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { fetchClientRoster, fetchOpenIssueSeveritySummary } from "@/lib/queries";
+import { fetchClientRoster, fetchOpenIssueSeveritySummary, fetchTriageClients } from "@/lib/queries";
 import { fetchSprintTaskCompletionByClient } from "@/lib/clientStage";
 import { ClientRosterTable } from "@/components/crawler/ClientRosterTable";
 import { NewClientSprintTable } from "@/components/crawler/NewClientSprintTable";
@@ -35,6 +35,7 @@ export default async function ClientsPage({
   let nextWeekMeetings: UpcomingMeeting[] = [];
   let meetingsError: string | null = null;
   const icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
+  const triageClients = await fetchTriageClients(supabase);
 
   if (icsUrl) {
     try {
@@ -76,8 +77,13 @@ export default async function ClientsPage({
         </p>
       )}
 
-      {icsUrl && (
-        <UpcomingMeetingsCard thisWeek={thisWeekMeetings} nextWeek={nextWeekMeetings} error={meetingsError} />
+      {(icsUrl || triageClients.length > 0) && (
+        <UpcomingMeetingsCard
+          thisWeek={thisWeekMeetings}
+          nextWeek={nextWeekMeetings}
+          error={icsUrl ? meetingsError : null}
+          triageClients={triageClients}
+        />
       )}
 
       <OverviewSummaryCard summary={issueSummary} />

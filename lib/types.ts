@@ -136,3 +136,12 @@ export interface IssueSeveritySummary {
   total: number;
   bySeverity: Record<IssueSeverity, number>;
 }
+
+/** A manual watchlist entry on the "Triage Clients" column -- not tied to `Client`. */
+export interface TriageClient {
+  id: string;
+  clientName: string;
+  startDate: string;
+  deadlineDate: string;
+  createdAt: string;
+}

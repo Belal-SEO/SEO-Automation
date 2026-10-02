@@ -480,6 +480,24 @@ export interface Database {
           },
         ];
       };
+      triage_clients: {
+        Row: {
+          id: string;
+          client_name: string;
+          start_date: string;
+          deadline_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_name: string;
+          start_date: string;
+          deadline_date: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["triage_clients"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
