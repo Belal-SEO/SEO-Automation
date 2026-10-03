@@ -88,6 +88,8 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
   const sprintTasks = issues
     .filter((i) => i.category === "sprint_task")
     .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+  // Manually-added tasks get their own board (below) -- keep them out of the crawl Issues table so they don't show twice.
+  const crawlIssues = issues.filter((i) => i.category !== "sprint_task");
 
   return (
     <div className="space-y-8">
@@ -169,8 +171,17 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
                   description="Connect a crawl source and run the first audit to see issues here."
                 />
               ) : (
-                <IssueTable issues={issues} />
+                <IssueTable issues={crawlIssues} />
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Manual tasks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SprintTasksBoard clientId={client.id} clientDomain={client.domain} tasks={sprintTasks} />
             </CardContent>
           </Card>
 
