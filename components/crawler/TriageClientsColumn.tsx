@@ -46,6 +46,7 @@ function TriageRow({ client }: { client: TriageClient }) {
 
 export function TriageClientsColumn({ clients }: { clients: TriageClient[] }) {
   const router = useRouter();
+  const [showForm, setShowForm] = useState(false);
   const [clientName, setClientName] = useState("");
   const [startDate, setStartDate] = useState(todayIso());
   const [deadlineDate, setDeadlineDate] = useState(todayIso());
@@ -62,53 +63,65 @@ export function TriageClientsColumn({ clients }: { clients: TriageClient[] }) {
       deadline_date: deadlineDate,
     });
     setClientName("");
+    setStartDate(todayIso());
+    setDeadlineDate(todayIso());
     setCreating(false);
+    setShowForm(false);
     router.refresh();
   }
 
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Triage clients</h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Triage clients</h3>
+        <Button type="button" size="sm" variant="secondary" onClick={() => setShowForm((s) => !s)}>
+          {showForm ? "Cancel" : "+ Add client"}
+        </Button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleAdd} className="mb-3 space-y-2 rounded-md border border-border p-3">
+          <Input
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+            placeholder="Client name"
+            aria-label="Client name"
+          />
+          <div className="flex gap-2">
+            <label className="flex-1 space-y-1">
+              <span className="text-xs text-muted-foreground">Start</span>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label="Start date"
+              />
+            </label>
+            <label className="flex-1 space-y-1">
+              <span className="text-xs text-muted-foreground">Deadline</span>
+              <Input
+                type="date"
+                value={deadlineDate}
+                onChange={(e) => setDeadlineDate(e.target.value)}
+                aria-label="Deadline"
+              />
+            </label>
+          </div>
+          <Button type="submit" size="sm" disabled={creating || !clientName.trim()} className="w-full">
+            {creating ? "Adding…" : "Add to triage"}
+          </Button>
+        </form>
+      )}
+
       {clients.length === 0 ? (
-        <p className="mb-3 text-sm text-muted-foreground">No clients in triage.</p>
+        <p className="text-sm text-muted-foreground">No clients in triage.</p>
       ) : (
-        <ul className="mb-3 space-y-2">
+        <ul className="space-y-2">
           {clients.map((client) => (
             <TriageRow key={client.id} client={client} />
           ))}
         </ul>
       )}
-      <form onSubmit={handleAdd} className="space-y-2 border-t border-border pt-3">
-        <Input
-          value={clientName}
-          onChange={(e) => setClientName(e.target.value)}
-          placeholder="Client name"
-          aria-label="Client name"
-        />
-        <div className="flex gap-2">
-          <label className="flex-1 space-y-1">
-            <span className="text-xs text-muted-foreground">Start</span>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              aria-label="Start date"
-            />
-          </label>
-          <label className="flex-1 space-y-1">
-            <span className="text-xs text-muted-foreground">Deadline</span>
-            <Input
-              type="date"
-              value={deadlineDate}
-              onChange={(e) => setDeadlineDate(e.target.value)}
-              aria-label="Deadline"
-            />
-          </label>
-        </div>
-        <Button type="submit" size="sm" disabled={creating || !clientName.trim()} className="w-full">
-          {creating ? "Adding…" : "Add to triage"}
-        </Button>
-      </form>
     </div>
   );
 }

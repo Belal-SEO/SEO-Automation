@@ -91,8 +91,7 @@ export function QuarterlyMeetingsSection({
 
   return (
     <div className="space-y-3 sm:col-span-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">Meetings with “Quarterly” in the name.</p>
+      <div className="flex items-center justify-end gap-2">
         <Button type="button" size="sm" variant="secondary" onClick={() => setShowForm((s) => !s)}>
           {showForm ? "Cancel" : "+ Add client"}
         </Button>
