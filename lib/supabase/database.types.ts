@@ -498,6 +498,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["triage_clients"]["Insert"]>;
         Relationships: [];
       };
+      manual_quarterly_meetings: {
+        Row: {
+          id: string;
+          client_name: string;
+          meeting_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_name: string;
+          meeting_date: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["manual_quarterly_meetings"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

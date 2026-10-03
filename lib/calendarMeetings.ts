@@ -11,6 +11,16 @@ export interface UpcomingMeeting {
   isFullDay: boolean;
 }
 
+/** A This week/Next week list entry -- a calendar-sourced quarterly meeting (id null, not deletable) or a manually added client (id set, deletable). */
+export interface QuarterlyMeetingItem extends UpcomingMeeting {
+  id: string | null;
+}
+
+/** Only calendar events whose title mentions "Quarterly" belong in the Quarterly meetings section. */
+export function isQuarterlyMeeting(summary: string): boolean {
+  return summary.toLowerCase().includes("quarterly");
+}
+
 const FETCH_TIMEOUT_MS = 8000;
 
 function resolveTextValue(value: unknown): string {

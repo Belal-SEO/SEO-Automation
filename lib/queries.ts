@@ -11,6 +11,7 @@ import type {
   MetricSnapshot,
   Report,
   TriageClient,
+  ManualQuarterlyMeeting,
 } from "@/lib/types";
 
 type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
@@ -231,4 +232,25 @@ export async function fetchTriageClients(supabase: SupabaseClient<Database>): Pr
     .order("deadline_date", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapTriageClient);
+}
+
+export function mapManualQuarterlyMeeting(row: Row<"manual_quarterly_meetings">): ManualQuarterlyMeeting {
+  return {
+    id: row.id,
+    clientName: row.client_name,
+    meetingDate: row.meeting_date,
+    createdAt: row.created_at,
+  };
+}
+
+/** Clients manually added to the "Quarterly client meetings" This week/Next week lists. */
+export async function fetchManualQuarterlyMeetings(
+  supabase: SupabaseClient<Database>,
+): Promise<ManualQuarterlyMeeting[]> {
+  const { data, error } = await supabase
+    .from("manual_quarterly_meetings")
+    .select("*")
+    .order("meeting_date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapManualQuarterlyMeeting);
 }

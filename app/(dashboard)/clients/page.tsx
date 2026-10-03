@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { fetchClientRoster, fetchOpenIssueSeveritySummary, fetchTriageClients } from "@/lib/queries";
+import {
+  fetchClientRoster,
+  fetchOpenIssueSeveritySummary,
+  fetchTriageClients,
+  fetchManualQuarterlyMeetings,
+} from "@/lib/queries";
 import { fetchSprintTaskCompletionByClient } from "@/lib/clientStage";
 import { ClientRosterTable } from "@/components/crawler/ClientRosterTable";
 import { NewClientSprintTable } from "@/components/crawler/NewClientSprintTable";
@@ -11,7 +16,12 @@ import { OverviewSummaryCard } from "@/components/crawler/OverviewSummaryCard";
 import { GscConnectionCard } from "@/components/crawler/GscConnectionCard";
 import { UpcomingMeetingsCard } from "@/components/crawler/UpcomingMeetingsCard";
 import { getGscConnectionStatus } from "@/lib/gscAuth";
-import { fetchMeetingsInRange, getWeekRange, type UpcomingMeeting } from "@/lib/calendarMeetings";
+import {
+  fetchMeetingsInRange,
+  getWeekRange,
+  isQuarterlyMeeting,
+  type QuarterlyMeetingItem,
+} from "@/lib/calendarMeetings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -31,24 +41,38 @@ export default async function ClientsPage({
     roster.map((c) => c.id),
   );
 
-  let thisWeekMeetings: UpcomingMeeting[] = [];
-  let nextWeekMeetings: UpcomingMeeting[] = [];
   let meetingsError: string | null = null;
   const icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
   const triageClients = await fetchTriageClients(supabase);
+  const manualMeetings = await fetchManualQuarterlyMeetings(supabase);
 
+  const { start: thisWeekStart, end: thisWeekEnd } = getWeekRange(0);
+  const { end: nextWeekEnd } = getWeekRange(1);
+
+  let calendarMeetings: QuarterlyMeetingItem[] = [];
   if (icsUrl) {
     try {
-      const { start: thisWeekStart } = getWeekRange(0);
-      const { end: nextWeekEnd } = getWeekRange(1);
       const all = await fetchMeetingsInRange(icsUrl, thisWeekStart, nextWeekEnd);
-      const { end: thisWeekEnd } = getWeekRange(0);
-      thisWeekMeetings = all.filter((m) => m.start < thisWeekEnd);
-      nextWeekMeetings = all.filter((m) => m.start >= thisWeekEnd);
+      calendarMeetings = all.filter((m) => isQuarterlyMeeting(m.summary)).map((m) => ({ ...m, id: null }));
     } catch (err) {
       meetingsError = err instanceof Error ? err.message : "Failed to load the calendar.";
     }
   }
+
+  const manualItems: QuarterlyMeetingItem[] = manualMeetings
+    .map((m) => ({
+      id: m.id,
+      summary: m.clientName,
+      start: new Date(`${m.meetingDate}T00:00:00`),
+      isFullDay: true,
+    }))
+    .filter((m) => m.start >= thisWeekStart && m.start < nextWeekEnd);
+
+  const allQuarterlyMeetings = [...calendarMeetings, ...manualItems].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+  const thisWeekMeetings = allQuarterlyMeetings.filter((m) => m.start < thisWeekEnd);
+  const nextWeekMeetings = allQuarterlyMeetings.filter((m) => m.start >= thisWeekEnd);
 
   const newClients = roster.filter((c) => c.stage === "new");
   const legacyClients = roster.filter((c) => c.stage === "legacy");
@@ -77,14 +101,12 @@ export default async function ClientsPage({
         </p>
       )}
 
-      {(icsUrl || triageClients.length > 0) && (
-        <UpcomingMeetingsCard
-          thisWeek={thisWeekMeetings}
-          nextWeek={nextWeekMeetings}
-          error={icsUrl ? meetingsError : null}
-          triageClients={triageClients}
-        />
-      )}
+      <UpcomingMeetingsCard
+        thisWeek={thisWeekMeetings}
+        nextWeek={nextWeekMeetings}
+        error={icsUrl ? meetingsError : null}
+        triageClients={triageClients}
+      />
 
       <OverviewSummaryCard summary={issueSummary} />
 

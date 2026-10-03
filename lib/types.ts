@@ -145,3 +145,11 @@ export interface TriageClient {
   deadlineDate: string;
   createdAt: string;
 }
+
+/** A client manually added to the "Quarterly client meetings" section -- not tied to `Client`. */
+export interface ManualQuarterlyMeeting {
+  id: string;
+  clientName: string;
+  meetingDate: string;
+  createdAt: string;
+}
