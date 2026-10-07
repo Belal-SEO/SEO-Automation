@@ -65,6 +65,7 @@ export interface Issue {
   afterScreenshotUrl: string | null;
   assignedTo: string | null;
   externalId: string | null;
+  dueDate: string | null;
 }
 
 export type IssueActivityType = "note" | "status_change";

@@ -186,7 +186,12 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
                   description="Connect a crawl source and run the first audit to see issues here."
                 />
               ) : (
-                <IssueTable issues={crawlIssues} canManagePriority={isAdmin} canDelete={isAdmin} />
+                <IssueTable
+                  issues={crawlIssues}
+                  canManagePriority={isAdmin}
+                  canManageDueDate={isAdmin}
+                  canDelete={isAdmin}
+                />
               )}
             </CardContent>
           </Card>

@@ -8,6 +8,7 @@ import { CompletedTasksHistory } from "@/components/crawler/CompletedTasksHistor
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
+import { syncFixedIssueToReport } from "@/lib/issueReportSync";
 import {
   ISSUE_CATEGORY_LABELS,
   SEVERITY_ORDER,
@@ -26,19 +27,30 @@ const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
+const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
+  { value: "open", label: "Not started" },
+  { value: "in_progress", label: "In progress" },
+  { value: "fixed", label: "Completed" },
+];
+
 function IssueRow({
   issue,
   canManagePriority,
+  canManageDueDate,
   canDelete,
 }: {
   issue: Issue;
   canManagePriority: boolean;
+  canManageDueDate: boolean;
   canDelete: boolean;
 }) {
   const router = useRouter();
   const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
+  const [status, setStatus] = useState<IssueStatus>(issue.status);
   const [assignedTo, setAssignedTo] = useState(issue.assignedTo ?? "");
-  const [busy, setBusy] = useState<"severity" | "assignee" | "delete" | null>(null);
+  const [dueDate, setDueDate] = useState(issue.dueDate ?? "");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState<"severity" | "status" | "assignee" | "dueDate" | "note" | "delete" | null>(null);
 
   async function handleDelete() {
     if (!window.confirm("Delete this issue? This can't be undone.")) return;
@@ -57,6 +69,27 @@ function IssueRow({
     router.refresh();
   }
 
+  async function handleStatusChange(newStatus: IssueStatus) {
+    setStatus(newStatus);
+    setBusy("status");
+    const supabase = createClient();
+    await supabase
+      .from("issues")
+      .update({ status: newStatus, fixed_at: newStatus === "fixed" ? new Date().toISOString() : null })
+      .eq("id", issue.id);
+    await supabase.from("issue_activity").insert({
+      issue_id: issue.id,
+      client_id: issue.clientId,
+      activity_type: "status_change",
+      new_status: newStatus,
+    });
+    if (newStatus === "fixed") {
+      await syncFixedIssueToReport(supabase, issue);
+    }
+    setBusy(null);
+    router.refresh();
+  }
+
   async function handleAssigneeBlur() {
     if (assignedTo === (issue.assignedTo ?? "")) return;
     setBusy("assignee");
@@ -65,6 +98,33 @@ function IssueRow({
       .from("issues")
       .update({ assigned_to: assignedTo.trim() || null })
       .eq("id", issue.id);
+    setBusy(null);
+    router.refresh();
+  }
+
+  async function handleDueDateChange(newDate: string) {
+    setDueDate(newDate);
+    setBusy("dueDate");
+    const supabase = createClient();
+    await supabase
+      .from("issues")
+      .update({ due_date: newDate || null })
+      .eq("id", issue.id);
+    setBusy(null);
+    router.refresh();
+  }
+
+  async function handleAddNote() {
+    if (!note.trim()) return;
+    setBusy("note");
+    const supabase = createClient();
+    await supabase.from("issue_activity").insert({
+      issue_id: issue.id,
+      client_id: issue.clientId,
+      activity_type: "note",
+      note: note.trim(),
+    });
+    setNote("");
     setBusy(null);
     router.refresh();
   }
@@ -91,7 +151,6 @@ function IssueRow({
               </select>
             )}
             <span className="text-xs text-muted-foreground">{ISSUE_CATEGORY_LABELS[issue.category]}</span>
-            <span className="text-xs capitalize text-muted-foreground">{issue.status.replace("_", " ")}</span>
           </div>
           <a
             href={issue.url}
@@ -102,26 +161,67 @@ function IssueRow({
             {issue.url}
           </a>
           <p className="text-sm text-muted-foreground">{issue.description}</p>
-          <p className="text-xs text-muted-foreground">Detected {formatDate(issue.detectedAt)}</p>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span>Detected {formatDate(issue.detectedAt)}</span>
+            {canManageDueDate ? (
+              <label className="flex items-center gap-1">
+                Due
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => handleDueDateChange(e.target.value)}
+                  disabled={busy === "dueDate"}
+                  className="h-6 rounded-md border border-border bg-background px-1 text-xs text-foreground"
+                />
+              </label>
+            ) : (
+              <span>Due {dueDate ? formatDate(dueDate) : "—"}</span>
+            )}
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            Assigned to
-            <input
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              onBlur={handleAssigneeBlur}
-              disabled={busy === "assignee"}
-              placeholder="Unassigned"
-              className="h-7 w-28 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-            />
-          </label>
+          <select
+            value={status}
+            onChange={(e) => handleStatusChange(e.target.value as IssueStatus)}
+            disabled={busy === "status"}
+            aria-label="Status"
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
           {canDelete && (
             <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
               {busy === "delete" ? "Deleting…" : "Delete"}
             </Button>
           )}
         </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Assigned to
+          <input
+            value={assignedTo}
+            onChange={(e) => setAssignedTo(e.target.value)}
+            onBlur={handleAssigneeBlur}
+            disabled={busy === "assignee"}
+            placeholder="Unassigned"
+            className="h-7 w-28 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+          />
+        </label>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
+          placeholder="Add a note…"
+          className="h-8 min-w-[10rem] flex-1 rounded-md border border-border bg-background px-3 text-sm"
+        />
+        <Button size="sm" variant="secondary" onClick={handleAddNote} disabled={busy === "note" || !note.trim()}>
+          {busy === "note" ? "Adding…" : "Add note"}
+        </Button>
       </div>
     </li>
   );
@@ -130,10 +230,12 @@ function IssueRow({
 export function IssueTable({
   issues,
   canManagePriority = true,
+  canManageDueDate = true,
   canDelete = true,
 }: {
   issues: Issue[];
   canManagePriority?: boolean;
+  canManageDueDate?: boolean;
   canDelete?: boolean;
 }) {
   const [category, setCategory] = useState<IssueCategory | "all">("all");
@@ -216,7 +318,13 @@ export function IssueTable({
       ) : (
         <ul className="space-y-3">
           {filtered.map((issue) => (
-            <IssueRow key={issue.id} issue={issue} canManagePriority={canManagePriority} canDelete={canDelete} />
+            <IssueRow
+              key={issue.id}
+              issue={issue}
+              canManagePriority={canManagePriority}
+              canManageDueDate={canManageDueDate}
+              canDelete={canDelete}
+            />
           ))}
         </ul>
       )}

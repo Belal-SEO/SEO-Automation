@@ -92,6 +92,7 @@ export interface Database {
           after_screenshot_url: string | null;
           assigned_to: string | null;
           external_id: string | null;
+          due_date: string | null;
         };
         Insert: {
           id?: string;
@@ -108,6 +109,7 @@ export interface Database {
           after_screenshot_url?: string | null;
           assigned_to?: string | null;
           external_id?: string | null;
+          due_date?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["issues"]["Insert"]>;
         Relationships: [

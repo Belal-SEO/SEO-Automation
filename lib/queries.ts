@@ -68,6 +68,7 @@ export function mapIssue(row: Row<"issues">): Issue {
     afterScreenshotUrl: row.after_screenshot_url,
     assignedTo: row.assigned_to,
     externalId: row.external_id,
+    dueDate: row.due_date,
   };
 }
 
