@@ -119,9 +119,15 @@ export function Sidebar({
       )}
     >
       <div className={cn("flex items-center gap-2 border-b border-border px-3 py-4", collapsed && "justify-center")}>
-        <Link href="/clients" className={cn("truncate font-semibold", collapsed && "sr-only")}>
-          SEO Audit Agent
-        </Link>
+        {collapsed ? (
+          <Link href="/clients" aria-label="CrawlR" className="text-lg font-bold">
+            C
+          </Link>
+        ) : (
+          <Link href="/clients" className="truncate font-semibold">
+            CrawlR
+          </Link>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">

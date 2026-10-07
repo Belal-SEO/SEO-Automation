@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SEO Technical Audit Agent",
+  title: "CrawlR",
   description: "AI-assisted technical SEO crawler, audit, and client reporting.",
 };
 

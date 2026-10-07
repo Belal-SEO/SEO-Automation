@@ -1,4 +1,4 @@
-# SEO-Automation
+# CrawlR
 
 AI Technical SEO Crawler & Audit Agent — an internal tool that crawls each
 clinic client's site, tracks technical health over time, and drafts
