@@ -13,7 +13,7 @@ export default async function OverviewPage() {
 
   const supabase = createClient();
   const role = await getCurrentTeamRole(supabase);
-  if (role !== "admin") redirect("/clients");
+  const isAdmin = role === "admin";
 
   const { data: clientRows } = await supabase.from("clients").select("*").eq("active", true).order("brand");
   const clients = (clientRows ?? []).map(mapClient);
@@ -42,7 +42,7 @@ export default async function OverviewPage() {
       {issues.length === 0 ? (
         <EmptyState title="No issues yet" description="Run an audit on a client to start surfacing issues here." />
       ) : (
-        <OverviewBoard issues={issues} clients={clients} />
+        <OverviewBoard issues={issues} clients={clients} canManagePriority={isAdmin} canDelete={isAdmin} />
       )}
     </div>
   );

@@ -12,7 +12,7 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function MeetingRow({ meeting }: { meeting: QuarterlyMeetingItem }) {
+function MeetingRow({ meeting, canManage }: { meeting: QuarterlyMeetingItem; canManage: boolean }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
@@ -30,7 +30,7 @@ function MeetingRow({ meeting }: { meeting: QuarterlyMeetingItem }) {
         <p className="truncate font-medium">{meeting.summary}</p>
         <p className="text-xs text-muted-foreground">{formatMeetingDate(meeting.start, meeting.isFullDay)}</p>
       </div>
-      {meeting.id && (
+      {canManage && meeting.id && (
         <button
           type="button"
           onClick={handleDelete}
@@ -45,14 +45,14 @@ function MeetingRow({ meeting }: { meeting: QuarterlyMeetingItem }) {
   );
 }
 
-function MeetingList({ meetings }: { meetings: QuarterlyMeetingItem[] }) {
+function MeetingList({ meetings, canManage }: { meetings: QuarterlyMeetingItem[]; canManage: boolean }) {
   if (meetings.length === 0) {
     return <p className="text-sm text-muted-foreground">No quarterly meetings.</p>;
   }
   return (
     <ul className="space-y-3">
       {meetings.map((m, i) => (
-        <MeetingRow key={m.id ?? `cal-${i}`} meeting={m} />
+        <MeetingRow key={m.id ?? `cal-${i}`} meeting={m} canManage={canManage} />
       ))}
     </ul>
   );
@@ -62,10 +62,12 @@ export function QuarterlyMeetingsSection({
   thisWeek,
   nextWeek,
   error,
+  canManage = true,
 }: {
   thisWeek: QuarterlyMeetingItem[];
   nextWeek: QuarterlyMeetingItem[];
   error?: string | null;
+  canManage?: boolean;
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -91,13 +93,15 @@ export function QuarterlyMeetingsSection({
 
   return (
     <div className="space-y-3 sm:col-span-2">
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" size="sm" variant="secondary" onClick={() => setShowForm((s) => !s)}>
-          {showForm ? "Cancel" : "+ Add client"}
-        </Button>
-      </div>
+      {canManage && (
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? "Cancel" : "+ Add client"}
+          </Button>
+        </div>
+      )}
 
-      {showForm && (
+      {canManage && showForm && (
         <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-3">
           <div className="min-w-[10rem] flex-1 space-y-1">
             <label className="text-xs text-muted-foreground">Client name</label>
@@ -118,11 +122,11 @@ export function QuarterlyMeetingsSection({
       <div className="grid gap-6 sm:grid-cols-2">
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">This week</h3>
-          <MeetingList meetings={thisWeek} />
+          <MeetingList meetings={thisWeek} canManage={canManage} />
         </div>
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next week</h3>
-          <MeetingList meetings={nextWeek} />
+          <MeetingList meetings={nextWeek} canManage={canManage} />
         </div>
       </div>
     </div>

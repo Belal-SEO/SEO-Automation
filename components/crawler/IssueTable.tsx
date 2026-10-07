@@ -27,7 +27,15 @@ const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
-function IssueRow({ issue }: { issue: Issue }) {
+function IssueRow({
+  issue,
+  canManagePriority,
+  canDelete,
+}: {
+  issue: Issue;
+  canManagePriority: boolean;
+  canDelete: boolean;
+}) {
   const router = useRouter();
   const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
   const [assignedTo, setAssignedTo] = useState(issue.assignedTo ?? "");
@@ -67,19 +75,21 @@ function IssueRow({ issue }: { issue: Issue }) {
       <Td>
         <div className="flex items-center gap-2">
           <SeverityBadge severity={severity} />
-          <select
-            value={severity}
-            onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
-            disabled={busy === "severity"}
-            aria-label="Priority"
-            className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
-          >
-            {SEVERITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          {canManagePriority && (
+            <select
+              value={severity}
+              onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
+              disabled={busy === "severity"}
+              aria-label="Priority"
+              className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+            >
+              {SEVERITY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </Td>
       <Td>{ISSUE_CATEGORY_LABELS[issue.category]}</Td>
@@ -102,15 +112,25 @@ function IssueRow({ issue }: { issue: Issue }) {
       </Td>
       <Td className="text-muted-foreground">{formatDate(issue.detectedAt)}</Td>
       <Td>
-        <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
-          {busy === "delete" ? "Deleting…" : "Delete"}
-        </Button>
+        {canDelete && (
+          <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+            {busy === "delete" ? "Deleting…" : "Delete"}
+          </Button>
+        )}
       </Td>
     </Tr>
   );
 }
 
-export function IssueTable({ issues }: { issues: Issue[] }) {
+export function IssueTable({
+  issues,
+  canManagePriority = true,
+  canDelete = true,
+}: {
+  issues: Issue[];
+  canManagePriority?: boolean;
+  canDelete?: boolean;
+}) {
   const [category, setCategory] = useState<IssueCategory | "all">("all");
   const [status, setStatus] = useState<IssueStatus | "all">("all");
   const [assignee, setAssignee] = useState<string>("all");
@@ -204,7 +224,7 @@ export function IssueTable({ issues }: { issues: Issue[] }) {
           </Thead>
           <Tbody>
             {filtered.map((issue) => (
-              <IssueRow key={issue.id} issue={issue} />
+              <IssueRow key={issue.id} issue={issue} canManagePriority={canManagePriority} canDelete={canDelete} />
             ))}
           </Tbody>
         </Table>

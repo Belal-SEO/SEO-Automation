@@ -45,7 +45,17 @@ const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
-function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string }) {
+function OverviewRow({
+  issue,
+  clientBrand,
+  canManagePriority,
+  canDelete,
+}: {
+  issue: Issue;
+  clientBrand: string;
+  canManagePriority: boolean;
+  canDelete: boolean;
+}) {
   const router = useRouter();
   const [status, setStatus] = useState<IssueStatus>(issue.status);
   const [severity, setSeverity] = useState<IssueSeverity>(issue.severity);
@@ -128,19 +138,21 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
                 {clientBrand}
               </Link>
               <SeverityBadge severity={severity} />
-              <select
-                value={severity}
-                onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
-                disabled={busy === "severity"}
-                aria-label="Priority"
-                className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
-              >
-                {SEVERITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              {canManagePriority && (
+                <select
+                  value={severity}
+                  onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
+                  disabled={busy === "severity"}
+                  aria-label="Priority"
+                  className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+                >
+                  {SEVERITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <span className="text-xs text-muted-foreground">{ISSUE_CATEGORY_LABELS[issue.category]}</span>
             </div>
             <a
@@ -167,9 +179,11 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
                 </option>
               ))}
             </select>
-            <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
-              {busy === "delete" ? "Deleting…" : "Delete"}
-            </Button>
+            {canDelete && (
+              <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+                {busy === "delete" ? "Deleting…" : "Delete"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -201,7 +215,17 @@ function OverviewRow({ issue, clientBrand }: { issue: Issue; clientBrand: string
   );
 }
 
-export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: Client[] }) {
+export function OverviewBoard({
+  issues,
+  clients,
+  canManagePriority = true,
+  canDelete = true,
+}: {
+  issues: Issue[];
+  clients: Client[];
+  canManagePriority?: boolean;
+  canDelete?: boolean;
+}) {
   const [severity, setSeverity] = useState<IssueSeverity | "all">("all");
   const [clientId, setClientId] = useState<string>("all");
   const [status, setStatus] = useState<IssueStatus | "all">("open");
@@ -310,7 +334,13 @@ export function OverviewBoard({ issues, clients }: { issues: Issue[]; clients: C
       ) : (
         <div className="space-y-3">
           {filtered.map((issue) => (
-            <OverviewRow key={issue.id} issue={issue} clientBrand={clientById.get(issue.clientId) ?? "—"} />
+            <OverviewRow
+              key={issue.id}
+              issue={issue}
+              clientBrand={clientById.get(issue.clientId) ?? "—"}
+              canManagePriority={canManagePriority}
+              canDelete={canDelete}
+            />
           ))}
         </div>
       )}

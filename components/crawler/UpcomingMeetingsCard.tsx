@@ -9,11 +9,13 @@ export function UpcomingMeetingsCard({
   nextWeek,
   error,
   triageClients,
+  canManage = true,
 }: {
   thisWeek: QuarterlyMeetingItem[];
   nextWeek: QuarterlyMeetingItem[];
   error?: string | null;
   triageClients: TriageClient[];
+  canManage?: boolean;
 }) {
   return (
     <Card>
@@ -22,8 +24,8 @@ export function UpcomingMeetingsCard({
       </CardHeader>
       <CardContent>
         <div className="grid gap-6 sm:grid-cols-3">
-          <QuarterlyMeetingsSection thisWeek={thisWeek} nextWeek={nextWeek} error={error} />
-          <TriageClientsColumn clients={triageClients} />
+          <QuarterlyMeetingsSection thisWeek={thisWeek} nextWeek={nextWeek} error={error} canManage={canManage} />
+          <TriageClientsColumn clients={triageClients} canManage={canManage} />
         </div>
       </CardContent>
     </Card>

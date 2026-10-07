@@ -170,28 +170,26 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
             </Card>
           )}
 
-          {isAdmin && (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Issues
-                  {latestAudit
-                    ? ` — latest audit (${formatDate(latestAudit.runAt)}${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
-                    : ""}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {audits.length === 0 ? (
-                  <EmptyState
-                    title="No audits yet"
-                    description="Connect a crawl source and run the first audit to see issues here."
-                  />
-                ) : (
-                  <IssueTable issues={crawlIssues} />
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Issues
+                {latestAudit
+                  ? ` — latest audit (${formatDate(latestAudit.runAt)}${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
+                  : ""}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {audits.length === 0 ? (
+                <EmptyState
+                  title="No audits yet"
+                  description="Connect a crawl source and run the first audit to see issues here."
+                />
+              ) : (
+                <IssueTable issues={crawlIssues} canManagePriority={isAdmin} canDelete={isAdmin} />
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

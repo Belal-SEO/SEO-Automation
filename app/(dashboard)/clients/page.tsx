@@ -40,52 +40,47 @@ export default async function ClientsPage({
   const roster = await fetchClientRoster(supabase);
 
   let gscStatus: Awaited<ReturnType<typeof getGscConnectionStatus>> | null = null;
-  let issueSummary: Awaited<ReturnType<typeof fetchOpenIssueSeveritySummary>> | null = null;
-  let meetingsError: string | null = null;
-  let icsUrl: string | undefined;
-  let triageClients: Awaited<ReturnType<typeof fetchTriageClients>> = [];
-  let thisWeekMeetings: QuarterlyMeetingItem[] = [];
-  let nextWeekMeetings: QuarterlyMeetingItem[] = [];
-
   if (isAdmin) {
     gscStatus = await getGscConnectionStatus();
-    issueSummary = await fetchOpenIssueSeveritySummary(
-      supabase,
-      roster.map((c) => c.id),
-    );
-
-    icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
-    triageClients = await fetchTriageClients(supabase);
-    const manualMeetings = await fetchManualQuarterlyMeetings(supabase);
-
-    const { start: thisWeekStart, end: thisWeekEnd } = getWeekRange(0);
-    const { end: nextWeekEnd } = getWeekRange(1);
-
-    let calendarMeetings: QuarterlyMeetingItem[] = [];
-    if (icsUrl) {
-      try {
-        const all = await fetchMeetingsInRange(icsUrl, thisWeekStart, nextWeekEnd);
-        calendarMeetings = all.filter((m) => isQuarterlyMeeting(m.summary)).map((m) => ({ ...m, id: null }));
-      } catch (err) {
-        meetingsError = err instanceof Error ? err.message : "Failed to load the calendar.";
-      }
-    }
-
-    const manualItems: QuarterlyMeetingItem[] = manualMeetings
-      .map((m) => ({
-        id: m.id,
-        summary: m.clientName,
-        start: new Date(`${m.meetingDate}T00:00:00`),
-        isFullDay: true,
-      }))
-      .filter((m) => m.start >= thisWeekStart && m.start < nextWeekEnd);
-
-    const allQuarterlyMeetings = [...calendarMeetings, ...manualItems].sort(
-      (a, b) => a.start.getTime() - b.start.getTime(),
-    );
-    thisWeekMeetings = allQuarterlyMeetings.filter((m) => m.start < thisWeekEnd);
-    nextWeekMeetings = allQuarterlyMeetings.filter((m) => m.start >= thisWeekEnd);
   }
+
+  const issueSummary = await fetchOpenIssueSeveritySummary(
+    supabase,
+    roster.map((c) => c.id),
+  );
+
+  let meetingsError: string | null = null;
+  const icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
+  const triageClients = await fetchTriageClients(supabase);
+  const manualMeetings = await fetchManualQuarterlyMeetings(supabase);
+
+  const { start: thisWeekStart, end: thisWeekEnd } = getWeekRange(0);
+  const { end: nextWeekEnd } = getWeekRange(1);
+
+  let calendarMeetings: QuarterlyMeetingItem[] = [];
+  if (icsUrl) {
+    try {
+      const all = await fetchMeetingsInRange(icsUrl, thisWeekStart, nextWeekEnd);
+      calendarMeetings = all.filter((m) => isQuarterlyMeeting(m.summary)).map((m) => ({ ...m, id: null }));
+    } catch (err) {
+      meetingsError = err instanceof Error ? err.message : "Failed to load the calendar.";
+    }
+  }
+
+  const manualItems: QuarterlyMeetingItem[] = manualMeetings
+    .map((m) => ({
+      id: m.id,
+      summary: m.clientName,
+      start: new Date(`${m.meetingDate}T00:00:00`),
+      isFullDay: true,
+    }))
+    .filter((m) => m.start >= thisWeekStart && m.start < nextWeekEnd);
+
+  const allQuarterlyMeetings = [...calendarMeetings, ...manualItems].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+  const thisWeekMeetings = allQuarterlyMeetings.filter((m) => m.start < thisWeekEnd);
+  const nextWeekMeetings = allQuarterlyMeetings.filter((m) => m.start >= thisWeekEnd);
 
   const newClients = roster.filter((c) => c.stage === "new");
   const legacyClients = roster.filter((c) => c.stage === "legacy");
@@ -114,16 +109,15 @@ export default async function ClientsPage({
         </p>
       )}
 
-      {isAdmin && (
-        <UpcomingMeetingsCard
-          thisWeek={thisWeekMeetings}
-          nextWeek={nextWeekMeetings}
-          error={icsUrl ? meetingsError : null}
-          triageClients={triageClients}
-        />
-      )}
+      <UpcomingMeetingsCard
+        thisWeek={thisWeekMeetings}
+        nextWeek={nextWeekMeetings}
+        error={icsUrl ? meetingsError : null}
+        triageClients={triageClients}
+        canManage={isAdmin}
+      />
 
-      {isAdmin && issueSummary && <OverviewSummaryCard summary={issueSummary} />}
+      <OverviewSummaryCard summary={issueSummary} />
 
       <Card>
         <CardHeader>

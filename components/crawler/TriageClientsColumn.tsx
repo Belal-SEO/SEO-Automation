@@ -12,7 +12,7 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function TriageRow({ client }: { client: TriageClient }) {
+function TriageRow({ client, canManage }: { client: TriageClient; canManage: boolean }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
@@ -31,20 +31,28 @@ function TriageRow({ client }: { client: TriageClient }) {
           {formatDate(client.startDate)} → {formatDate(client.deadlineDate)}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={handleDelete}
-        disabled={deleting}
-        className="shrink-0 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
-        aria-label={`Remove ${client.clientName} from triage`}
-      >
-        {deleting ? "Removing…" : "Remove"}
-      </button>
+      {canManage && (
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="shrink-0 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+          aria-label={`Remove ${client.clientName} from triage`}
+        >
+          {deleting ? "Removing…" : "Remove"}
+        </button>
+      )}
     </li>
   );
 }
 
-export function TriageClientsColumn({ clients }: { clients: TriageClient[] }) {
+export function TriageClientsColumn({
+  clients,
+  canManage = true,
+}: {
+  clients: TriageClient[];
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -74,12 +82,14 @@ export function TriageClientsColumn({ clients }: { clients: TriageClient[] }) {
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Triage clients</h3>
-        <Button type="button" size="sm" variant="secondary" onClick={() => setShowForm((s) => !s)}>
-          {showForm ? "Cancel" : "+ Add client"}
-        </Button>
+        {canManage && (
+          <Button type="button" size="sm" variant="secondary" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? "Cancel" : "+ Add client"}
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {canManage && showForm && (
         <form onSubmit={handleAdd} className="mb-3 space-y-2 rounded-md border border-border p-3">
           <Input
             value={clientName}
@@ -118,7 +128,7 @@ export function TriageClientsColumn({ clients }: { clients: TriageClient[] }) {
       ) : (
         <ul className="space-y-2">
           {clients.map((client) => (
-            <TriageRow key={client.id} client={client} />
+            <TriageRow key={client.id} client={client} canManage={canManage} />
           ))}
         </ul>
       )}
