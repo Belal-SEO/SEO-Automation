@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { SeverityBadge } from "@/components/crawler/SeverityBadge";
 import { EmptyState } from "@/components/crawler/EmptyState";
 import { CompletedTasksHistory } from "@/components/crawler/CompletedTasksHistory";
@@ -71,54 +70,60 @@ function IssueRow({
   }
 
   return (
-    <Tr>
-      <Td>
-        <div className="flex items-center gap-2">
-          <SeverityBadge severity={severity} />
-          {canManagePriority && (
-            <select
-              value={severity}
-              onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
-              disabled={busy === "severity"}
-              aria-label="Priority"
-              className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
-            >
-              {SEVERITY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+    <li className="rounded-md border border-border p-3 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <SeverityBadge severity={severity} />
+            {canManagePriority && (
+              <select
+                value={severity}
+                onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
+                disabled={busy === "severity"}
+                aria-label="Priority"
+                className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+              >
+                {SEVERITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className="text-xs text-muted-foreground">{ISSUE_CATEGORY_LABELS[issue.category]}</span>
+            <span className="text-xs capitalize text-muted-foreground">{issue.status.replace("_", " ")}</span>
+          </div>
+          <a
+            href={issue.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block max-w-full truncate text-sm font-medium hover:underline"
+          >
+            {issue.url}
+          </a>
+          <p className="text-sm text-muted-foreground">{issue.description}</p>
+          <p className="text-xs text-muted-foreground">Detected {formatDate(issue.detectedAt)}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Assigned to
+            <input
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              onBlur={handleAssigneeBlur}
+              disabled={busy === "assignee"}
+              placeholder="Unassigned"
+              className="h-7 w-28 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            />
+          </label>
+          {canDelete && (
+            <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+              {busy === "delete" ? "Deleting…" : "Delete"}
+            </Button>
           )}
         </div>
-      </Td>
-      <Td>{ISSUE_CATEGORY_LABELS[issue.category]}</Td>
-      <Td className="max-w-xs truncate">
-        <a href={issue.url} target="_blank" rel="noreferrer" className="hover:underline">
-          {issue.url}
-        </a>
-      </Td>
-      <Td className="max-w-sm text-muted-foreground">{issue.description}</Td>
-      <Td className="capitalize">{issue.status.replace("_", " ")}</Td>
-      <Td>
-        <input
-          value={assignedTo}
-          onChange={(e) => setAssignedTo(e.target.value)}
-          onBlur={handleAssigneeBlur}
-          disabled={busy === "assignee"}
-          placeholder="Unassigned"
-          className="h-7 w-28 rounded-md border border-border bg-background px-2 text-xs"
-        />
-      </Td>
-      <Td className="text-muted-foreground">{formatDate(issue.detectedAt)}</Td>
-      <Td>
-        {canDelete && (
-          <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
-            {busy === "delete" ? "Deleting…" : "Delete"}
-          </Button>
-        )}
-      </Td>
-    </Tr>
+      </div>
+    </li>
   );
 }
 
@@ -209,25 +214,11 @@ export function IssueTable({
       {filtered.length === 0 ? (
         <EmptyState title="No matching issues" description="Try a different filter." />
       ) : (
-        <Table>
-          <Thead>
-            <Tr>
-              <Th>Priority</Th>
-              <Th>Category</Th>
-              <Th>Page</Th>
-              <Th>Description</Th>
-              <Th>Status</Th>
-              <Th>Assigned to</Th>
-              <Th>Detected</Th>
-              <Th />
-            </Tr>
-          </Thead>
-          <Tbody>
-            {filtered.map((issue) => (
-              <IssueRow key={issue.id} issue={issue} canManagePriority={canManagePriority} canDelete={canDelete} />
-            ))}
-          </Tbody>
-        </Table>
+        <ul className="space-y-3">
+          {filtered.map((issue) => (
+            <IssueRow key={issue.id} issue={issue} canManagePriority={canManagePriority} canDelete={canDelete} />
+          ))}
+        </ul>
       )}
 
       <div className="space-y-3 border-t border-border pt-6">
