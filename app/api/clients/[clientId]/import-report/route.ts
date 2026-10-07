@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { extractTasksFromText } from "@/lib/openRouterImport";
+import { requireAdmin } from "@/lib/teamAccess";
 import { ISSUE_CATEGORY_LABELS, type IssueCategory } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -12,6 +13,9 @@ const NEW_CATEGORIES: IssueCategory[] = ["sprint_task"];
 
 /** Extracts a task list from pasted audit report text -- no DB writes here, the client reviews before creating. */
 export async function POST(request: Request, { params }: { params: { clientId: string } }) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   try {
     const supabase = createServiceRoleClient();
     const { data: clientRow, error } = await supabase

@@ -29,7 +29,15 @@ const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
 
 const UNASSIGNED = "__unassigned__";
 
-function TaskRow({ task }: { task: Issue }) {
+function TaskRow({
+  task,
+  canManagePriority,
+  canDelete,
+}: {
+  task: Issue;
+  canManagePriority: boolean;
+  canDelete: boolean;
+}) {
   const router = useRouter();
   const [status, setStatus] = useState<IssueStatus>(task.status);
   const [severity, setSeverity] = useState<IssueSeverity>(task.severity);
@@ -109,19 +117,21 @@ function TaskRow({ task }: { task: Issue }) {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={severity} />
-              <select
-                value={severity}
-                onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
-                disabled={busy === "severity"}
-                aria-label="Priority"
-                className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
-              >
-                {SEVERITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              {canManagePriority && (
+                <select
+                  value={severity}
+                  onChange={(e) => handleSeverityChange(e.target.value as IssueSeverity)}
+                  disabled={busy === "severity"}
+                  aria-label="Priority"
+                  className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+                >
+                  {SEVERITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <span className="text-xs text-muted-foreground">Added {formatDate(task.detectedAt)}</span>
             </div>
             <p className="text-sm">{task.description}</p>
@@ -139,9 +149,11 @@ function TaskRow({ task }: { task: Issue }) {
                 </option>
               ))}
             </select>
-            <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
-              {busy === "delete" ? "Deleting…" : "Delete"}
-            </Button>
+            {canDelete && (
+              <Button size="sm" variant="destructive" onClick={handleDelete} disabled={busy === "delete"}>
+                {busy === "delete" ? "Deleting…" : "Delete"}
+              </Button>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -176,10 +188,14 @@ export function SprintTasksBoard({
   clientId,
   clientDomain,
   tasks,
+  canManagePriority = true,
+  canDelete = true,
 }: {
   clientId: string;
   clientDomain: string;
   tasks: Issue[];
+  canManagePriority?: boolean;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [description, setDescription] = useState("");
@@ -233,20 +249,22 @@ export function SprintTasksBoard({
             placeholder="Describe the task…"
           />
         </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Priority</label>
-          <select
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value as IssueSeverity)}
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            {SEVERITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {canManagePriority && (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Priority</label>
+            <select
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value as IssueSeverity)}
+              className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              {SEVERITY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Assign to</label>
           <Input
@@ -286,7 +304,7 @@ export function SprintTasksBoard({
           ) : (
             <div className="space-y-3">
               {filteredTasks.map((task) => (
-                <TaskRow key={task.id} task={task} />
+                <TaskRow key={task.id} task={task} canManagePriority={canManagePriority} canDelete={canDelete} />
               ))}
             </div>
           )}

@@ -12,6 +12,8 @@ import type {
   Report,
   TriageClient,
   ManualQuarterlyMeeting,
+  TeamMember,
+  TeamRole,
 } from "@/lib/types";
 
 type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
@@ -253,4 +255,21 @@ export async function fetchManualQuarterlyMeetings(
     .order("meeting_date", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapManualQuarterlyMeeting);
+}
+
+export function mapTeamMember(row: Row<"team_members">): TeamMember {
+  return {
+    id: row.id,
+    email: row.email,
+    role: row.role as TeamRole,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+  };
+}
+
+/** Admin-only: the full team roster, for the Team settings page. */
+export async function fetchTeamMembers(supabase: SupabaseClient<Database>): Promise<TeamMember[]> {
+  const { data, error } = await supabase.from("team_members").select("*").order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapTeamMember);
 }

@@ -16,7 +16,15 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((target - Date.now()) / 86400000);
 }
 
-function SprintRow({ client, completion }: { client: ClientRosterRow; completion: SprintTaskCompletion }) {
+function SprintRow({
+  client,
+  completion,
+  canEdit,
+}: {
+  client: ClientRosterRow;
+  completion: SprintTaskCompletion;
+  canEdit: boolean;
+}) {
   const router = useRouter();
   const [extendValue, setExtendValue] = useState(client.sprintDeadline ?? "");
   const [busy, setBusy] = useState<"extend" | "move" | null>(null);
@@ -78,20 +86,24 @@ function SprintRow({ client, completion }: { client: ClientRosterRow; completion
         </span>
       </Td>
       <Td>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={extendValue}
-            onChange={(e) => setExtendValue(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs"
-          />
-          <Button size="sm" variant="secondary" onClick={handleExtend} disabled={busy === "extend" || !extendValue}>
-            Extend
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleMoveToLegacy} disabled={busy === "move"}>
-            Move to legacy
-          </Button>
-        </div>
+        {canEdit ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={extendValue}
+              onChange={(e) => setExtendValue(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+            />
+            <Button size="sm" variant="secondary" onClick={handleExtend} disabled={busy === "extend" || !extendValue}>
+              Extend
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleMoveToLegacy} disabled={busy === "move"}>
+              Move to legacy
+            </Button>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
       </Td>
     </Tr>
   );
@@ -100,9 +112,11 @@ function SprintRow({ client, completion }: { client: ClientRosterRow; completion
 export function NewClientSprintTable({
   clients,
   completionByClient,
+  canEdit = true,
 }: {
   clients: ClientRosterRow[];
   completionByClient: Map<string, SprintTaskCompletion>;
+  canEdit?: boolean;
 }) {
   return (
     <Table>
@@ -123,6 +137,7 @@ export function NewClientSprintTable({
             completion={
               completionByClient.get(c.id) ?? { totalAssigned: 0, completedAssigned: 0, allComplete: false }
             }
+            canEdit={canEdit}
           />
         ))}
       </Tbody>

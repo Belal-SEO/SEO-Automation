@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapClient, mapIssue } from "@/lib/queries";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { OverviewBoard } from "@/components/crawler/OverviewBoard";
 import { EmptyState } from "@/components/crawler/EmptyState";
 
@@ -11,6 +12,8 @@ export default async function OverviewPage() {
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  if (role !== "admin") redirect("/clients");
 
   const { data: clientRows } = await supabase.from("clients").select("*").eq("active", true).order("brand");
   const clients = (clientRows ?? []).map(mapClient);

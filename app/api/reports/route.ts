@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/teamAccess";
 import { mapClient, mapIssue, mapReport } from "@/lib/queries";
 import { generateReportDraft } from "@/lib/claude";
 import { sendReportEmail, saveReportToDrive } from "@/lib/google";
@@ -17,6 +18,9 @@ const TRACKED_METRICS: MetricName[] = ["lcp", "cls", "inp"];
 
 /** Generates a new report draft from the two most recent completed audits. */
 export async function PUT(request: Request) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   const parsed = generateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "clientId is required." }, { status: 400 });
@@ -122,6 +126,9 @@ export async function PUT(request: Request) {
 
 /** Sends an approved report via Gmail or saves it to Drive, then marks it sent. */
 export async function POST(request: Request) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   const parsed = sendSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "reportId and sendVia are required." }, { status: 400 });

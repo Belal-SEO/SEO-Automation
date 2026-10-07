@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapClient } from "@/lib/queries";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { mapBaseline, mapMonthlyReport, mapMonthlyReportSettings } from "@/lib/monthlyReportQueries";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,8 @@ export default async function ClientMonthlyReportsPage({ params }: { params: { c
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  if (role !== "admin") redirect("/clients");
 
   const { data: clientRow } = await supabase
     .from("clients")

@@ -514,6 +514,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["manual_quarterly_meetings"]["Insert"]>;
         Relationships: [];
       };
+      team_members: {
+        Row: {
+          id: string;
+          email: string;
+          role: string;
+          display_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          role: string;
+          display_name?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_members"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

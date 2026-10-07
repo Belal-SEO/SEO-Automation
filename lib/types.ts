@@ -153,3 +153,14 @@ export interface ManualQuarterlyMeeting {
   meetingDate: string;
   createdAt: string;
 }
+
+/** Admin: full access. Editor: client roster + per-client task boards only -- no priority edits, no deletes. */
+export type TeamRole = "admin" | "editor";
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  role: TeamRole;
+  displayName: string | null;
+  createdAt: string;
+}

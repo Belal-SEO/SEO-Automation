@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { fetchClientRoster } from "@/lib/queries";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { CoverageOverview } from "@/components/crawler/CoverageOverview";
 import { EmptyState } from "@/components/crawler/EmptyState";
 
@@ -11,6 +12,9 @@ export default async function CoveragePage() {
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  if (role !== "admin") redirect("/clients");
+
   const roster = await fetchClientRoster(supabase);
 
   return (

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapClient } from "@/lib/queries";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import {
   mapBaseline,
   mapMonthlyReport,
@@ -47,6 +48,8 @@ export default async function MonthlyReportEditorPage({
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  if (role !== "admin") redirect("/clients");
 
   const [{ data: clientRow }, { data: reportRow }, { data: baselineRow }, { data: settingsRow }] = await Promise.all([
     supabase.from("clients").select("*").eq("id", params.clientId).maybeSingle(),

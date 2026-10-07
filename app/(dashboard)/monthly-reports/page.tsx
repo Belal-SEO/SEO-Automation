@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { fetchMonthlyReportRoster } from "@/lib/monthlyReportQueries";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { MonthlyReportRosterTable } from "@/components/monthlyreport/MonthlyReportRosterTable";
 import { EmptyState } from "@/components/crawler/EmptyState";
 
@@ -11,6 +12,9 @@ export default async function MonthlyReportsPage() {
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  if (role !== "admin") redirect("/clients");
+
   const rows = await fetchMonthlyReportRoster(supabase);
 
   return (

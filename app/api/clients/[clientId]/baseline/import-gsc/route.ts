@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { importBaselineFromGsc } from "@/lib/baselineImport";
+import { requireAdmin } from "@/lib/teamAccess";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /** Pulls impressions/clicks, top 3 pages, and sitemap info from Search Console into this client's baseline. */
 export async function POST(request: Request, { params }: { params: { clientId: string } }) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   try {
     const body = await request.json().catch(() => null);
     const siteUrl = typeof body?.siteUrl === "string" ? body.siteUrl.trim() : "";

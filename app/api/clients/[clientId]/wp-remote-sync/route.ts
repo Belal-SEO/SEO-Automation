@@ -3,9 +3,13 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { mapClient } from "@/lib/queries";
 import { fetchWpRemoteSites } from "@/lib/wpRemote";
 import { syncClientSecurity } from "@/lib/wpRemoteSync";
+import { requireAdmin } from "@/lib/teamAccess";
 
 /** Pulls this client's current WP Remote security findings (malware, vulnerabilities, outdated software). */
 export async function POST(request: Request, { params }: { params: { clientId: string } }) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   try {
     const supabase = createServiceRoleClient();
     const { data: clientRow, error } = await supabase

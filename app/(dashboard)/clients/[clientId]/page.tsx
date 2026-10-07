@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapAudit, mapClient, mapIssue, mapMetricSnapshot, mapReport } from "@/lib/queries";
 import { mapBaseline } from "@/lib/monthlyReportQueries";
 import { computeSprintTaskCompletion } from "@/lib/clientStage";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AuditTriggerButton } from "@/components/crawler/AuditTriggerButton";
 import { GenerateReportButton } from "@/components/crawler/GenerateReportButton";
@@ -38,6 +39,8 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
   if (!clientRow) notFound();
   const client = mapClient(clientRow);
   const isNew = client.stage === "new";
+  const role = await getCurrentTeamRole(supabase);
+  const isAdmin = role === "admin";
 
   const [{ data: auditRows }, { data: reportRows }] = await Promise.all([
     supabase
@@ -75,10 +78,12 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         .eq("client_id", client.id)
         .order("captured_at", { ascending: true }),
       isNew ? computeSprintTaskCompletion(supabase, client.id) : Promise.resolve(null),
-      isNew
+      isNew && isAdmin
         ? supabase.from("monthly_report_settings").select("gsc_site_url").eq("client_id", client.id).maybeSingle()
         : Promise.resolve({ data: null }),
-      isNew ? supabase.from("baselines").select("*").eq("client_id", client.id).maybeSingle() : Promise.resolve({ data: null }),
+      isNew && isAdmin
+        ? supabase.from("baselines").select("*").eq("client_id", client.id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
   const issues = (issueRows ?? []).map(mapIssue);
@@ -100,23 +105,25 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
             {client.name} · {client.domain} · {client.locations.join(", ") || "No locations set"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/clients/${client.id}/monthly-reports`}
-            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-          >
-            Monthly Reports
-          </Link>
-          {!isNew && (
-            <>
-              <GenerateReportButton clientId={client.id} />
-              <AuditTriggerButton clientId={client.id} />
-            </>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/clients/${client.id}/monthly-reports`}
+              className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              Monthly Reports
+            </Link>
+            {!isNew && (
+              <>
+                <GenerateReportButton clientId={client.id} />
+                <AuditTriggerButton clientId={client.id} />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {isNew && sprintCompletion && (
+      {isAdmin && isNew && sprintCompletion && (
         <Card>
           <CardContent className="p-4">
             <SprintStatusPanel client={client} completion={sprintCompletion} />
@@ -124,14 +131,14 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         </Card>
       )}
 
-      {isNew && (
+      {isAdmin && isNew && (
         <BaselineSummaryCard clientId={client.id} gscSiteUrl={settingsRow?.gsc_site_url ?? null} baseline={baseline} />
       )}
 
-      {!isNew && inProgressAudit && (
+      {isAdmin && !isNew && inProgressAudit && (
         <CrawlStatusBanner status={inProgressAudit.status} error={inProgressAudit.error} />
       )}
-      {!isNew && latestAudit?.status === "failed" && (
+      {isAdmin && !isNew && latestAudit?.status === "failed" && (
         <CrawlStatusBanner status="failed" error={latestAudit.error} />
       )}
 
@@ -141,102 +148,126 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
             <CardTitle>Sprint tasks</CardTitle>
           </CardHeader>
           <CardContent>
-            <SprintTasksBoard clientId={client.id} clientDomain={client.domain} tasks={sprintTasks} />
+            <SprintTasksBoard
+              clientId={client.id}
+              clientDomain={client.domain}
+              tasks={sprintTasks}
+              canManagePriority={isAdmin}
+              canDelete={isAdmin}
+            />
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Core Web Vitals trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CWVTrendChart snapshots={metricSnapshots} />
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Core Web Vitals trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CWVTrendChart snapshots={metricSnapshots} />
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Issues
-                {latestAudit
-                  ? ` — latest audit (${formatDate(latestAudit.runAt)}${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
-                  : ""}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {audits.length === 0 ? (
-                <EmptyState
-                  title="No audits yet"
-                  description="Connect a crawl source and run the first audit to see issues here."
-                />
-              ) : (
-                <IssueTable issues={crawlIssues} />
-              )}
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Issues
+                  {latestAudit
+                    ? ` — latest audit (${formatDate(latestAudit.runAt)}${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
+                    : ""}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {audits.length === 0 ? (
+                  <EmptyState
+                    title="No audits yet"
+                    description="Connect a crawl source and run the first audit to see issues here."
+                  />
+                ) : (
+                  <IssueTable issues={crawlIssues} />
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
               <CardTitle>Manual tasks</CardTitle>
             </CardHeader>
             <CardContent>
-              <SprintTasksBoard clientId={client.id} clientDomain={client.domain} tasks={sprintTasks} />
+              <SprintTasksBoard
+                clientId={client.id}
+                clientDomain={client.domain}
+                tasks={sprintTasks}
+                canManagePriority={isAdmin}
+                canDelete={isAdmin}
+              />
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Before / after</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <BeforeAfterGallery issues={fixedIssues} />
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Before / after</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BeforeAfterGallery issues={fixedIssues} />
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Reports</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {reports.length === 0 ? (
-                <EmptyState title="No reports yet" description="Generate a draft once an audit has completed." />
-              ) : (
-                <ul className="divide-y divide-border">
-                  {reports.map((r) => (
-                    <li key={r.id} className="flex items-center justify-between py-2 text-sm">
-                      <Link href={`/clients/${client.id}/reports/${r.id}`} className="hover:underline">
-                        {formatDate(r.periodStart)} – {formatDate(r.periodEnd)}
-                      </Link>
-                      <span className="capitalize text-muted-foreground">{r.status}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reports</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reports.length === 0 ? (
+                  <EmptyState title="No reports yet" description="Generate a draft once an audit has completed." />
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {reports.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between py-2 text-sm">
+                        <Link href={`/clients/${client.id}/reports/${r.id}`} className="hover:underline">
+                          {formatDate(r.periodStart)} – {formatDate(r.periodEnd)}
+                        </Link>
+                        <span className="capitalize text-muted-foreground">{r.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Import tasks from text</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ImportReportPanel clientId={client.id} clientDomain={client.domain} isNew={isNew} />
-        </CardContent>
-      </Card>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Import tasks from text</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ImportReportPanel clientId={client.id} clientDomain={client.domain} isNew={isNew} />
+          </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>WP Remote security</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <WpRemoteSecurityPanel client={client} lastSync={wpRemoteAudit} />
-        </CardContent>
-      </Card>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>WP Remote security</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <WpRemoteSecurityPanel client={client} lastSync={wpRemoteAudit} />
+          </CardContent>
+        </Card>
+      )}
 
-      {!isNew && (
+      {isAdmin && !isNew && (
         <Card>
           <CardHeader>
             <CardTitle>Audit instructions</CardTitle>
@@ -247,14 +278,16 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Alert settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <NotificationSettings client={client} />
-        </CardContent>
-      </Card>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Alert settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NotificationSettings client={client} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

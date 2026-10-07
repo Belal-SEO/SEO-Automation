@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/teamAccess";
 
 const bodySchema = z.object({ clientId: z.string().uuid(), model: z.string().min(1).optional() });
 
@@ -12,6 +13,9 @@ const bodySchema = z.object({ clientId: z.string().uuid(), model: z.string().min
  * longer than a Vercel serverless function's timeout allows.
  */
 export async function POST(request: Request) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "clientId is required." }, { status: 400 });

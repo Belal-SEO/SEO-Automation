@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { mapClient, mapReport } from "@/lib/queries";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ReportDraftEditor } from "@/components/crawler/ReportDraftEditor";
 import { formatDate } from "@/lib/utils";
@@ -16,6 +17,8 @@ export default async function ReportPage({
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  if (role !== "admin") redirect("/clients");
 
   const [{ data: clientRow }, { data: reportRow }] = await Promise.all([
     supabase.from("clients").select("*").eq("id", params.clientId).maybeSingle(),

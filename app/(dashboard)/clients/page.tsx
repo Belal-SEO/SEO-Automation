@@ -8,6 +8,7 @@ import {
   fetchManualQuarterlyMeetings,
 } from "@/lib/queries";
 import { fetchSprintTaskCompletionByClient } from "@/lib/clientStage";
+import { getCurrentTeamRole } from "@/lib/teamAccess";
 import { ClientRosterTable } from "@/components/crawler/ClientRosterTable";
 import { NewClientSprintTable } from "@/components/crawler/NewClientSprintTable";
 import { ClientForm } from "@/components/crawler/ClientForm";
@@ -34,45 +35,57 @@ export default async function ClientsPage({
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
+  const role = await getCurrentTeamRole(supabase);
+  const isAdmin = role === "admin";
   const roster = await fetchClientRoster(supabase);
-  const gscStatus = await getGscConnectionStatus();
-  const issueSummary = await fetchOpenIssueSeveritySummary(
-    supabase,
-    roster.map((c) => c.id),
-  );
 
+  let gscStatus: Awaited<ReturnType<typeof getGscConnectionStatus>> | null = null;
+  let issueSummary: Awaited<ReturnType<typeof fetchOpenIssueSeveritySummary>> | null = null;
   let meetingsError: string | null = null;
-  const icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
-  const triageClients = await fetchTriageClients(supabase);
-  const manualMeetings = await fetchManualQuarterlyMeetings(supabase);
+  let icsUrl: string | undefined;
+  let triageClients: Awaited<ReturnType<typeof fetchTriageClients>> = [];
+  let thisWeekMeetings: QuarterlyMeetingItem[] = [];
+  let nextWeekMeetings: QuarterlyMeetingItem[] = [];
 
-  const { start: thisWeekStart, end: thisWeekEnd } = getWeekRange(0);
-  const { end: nextWeekEnd } = getWeekRange(1);
+  if (isAdmin) {
+    gscStatus = await getGscConnectionStatus();
+    issueSummary = await fetchOpenIssueSeveritySummary(
+      supabase,
+      roster.map((c) => c.id),
+    );
 
-  let calendarMeetings: QuarterlyMeetingItem[] = [];
-  if (icsUrl) {
-    try {
-      const all = await fetchMeetingsInRange(icsUrl, thisWeekStart, nextWeekEnd);
-      calendarMeetings = all.filter((m) => isQuarterlyMeeting(m.summary)).map((m) => ({ ...m, id: null }));
-    } catch (err) {
-      meetingsError = err instanceof Error ? err.message : "Failed to load the calendar.";
+    icsUrl = process.env.CLIENT_MEETINGS_ICS_URL;
+    triageClients = await fetchTriageClients(supabase);
+    const manualMeetings = await fetchManualQuarterlyMeetings(supabase);
+
+    const { start: thisWeekStart, end: thisWeekEnd } = getWeekRange(0);
+    const { end: nextWeekEnd } = getWeekRange(1);
+
+    let calendarMeetings: QuarterlyMeetingItem[] = [];
+    if (icsUrl) {
+      try {
+        const all = await fetchMeetingsInRange(icsUrl, thisWeekStart, nextWeekEnd);
+        calendarMeetings = all.filter((m) => isQuarterlyMeeting(m.summary)).map((m) => ({ ...m, id: null }));
+      } catch (err) {
+        meetingsError = err instanceof Error ? err.message : "Failed to load the calendar.";
+      }
     }
+
+    const manualItems: QuarterlyMeetingItem[] = manualMeetings
+      .map((m) => ({
+        id: m.id,
+        summary: m.clientName,
+        start: new Date(`${m.meetingDate}T00:00:00`),
+        isFullDay: true,
+      }))
+      .filter((m) => m.start >= thisWeekStart && m.start < nextWeekEnd);
+
+    const allQuarterlyMeetings = [...calendarMeetings, ...manualItems].sort(
+      (a, b) => a.start.getTime() - b.start.getTime(),
+    );
+    thisWeekMeetings = allQuarterlyMeetings.filter((m) => m.start < thisWeekEnd);
+    nextWeekMeetings = allQuarterlyMeetings.filter((m) => m.start >= thisWeekEnd);
   }
-
-  const manualItems: QuarterlyMeetingItem[] = manualMeetings
-    .map((m) => ({
-      id: m.id,
-      summary: m.clientName,
-      start: new Date(`${m.meetingDate}T00:00:00`),
-      isFullDay: true,
-    }))
-    .filter((m) => m.start >= thisWeekStart && m.start < nextWeekEnd);
-
-  const allQuarterlyMeetings = [...calendarMeetings, ...manualItems].sort(
-    (a, b) => a.start.getTime() - b.start.getTime(),
-  );
-  const thisWeekMeetings = allQuarterlyMeetings.filter((m) => m.start < thisWeekEnd);
-  const nextWeekMeetings = allQuarterlyMeetings.filter((m) => m.start >= thisWeekEnd);
 
   const newClients = roster.filter((c) => c.stage === "new");
   const legacyClients = roster.filter((c) => c.stage === "legacy");
@@ -101,14 +114,16 @@ export default async function ClientsPage({
         </p>
       )}
 
-      <UpcomingMeetingsCard
-        thisWeek={thisWeekMeetings}
-        nextWeek={nextWeekMeetings}
-        error={icsUrl ? meetingsError : null}
-        triageClients={triageClients}
-      />
+      {isAdmin && (
+        <UpcomingMeetingsCard
+          thisWeek={thisWeekMeetings}
+          nextWeek={nextWeekMeetings}
+          error={icsUrl ? meetingsError : null}
+          triageClients={triageClients}
+        />
+      )}
 
-      <OverviewSummaryCard summary={issueSummary} />
+      {isAdmin && issueSummary && <OverviewSummaryCard summary={issueSummary} />}
 
       <Card>
         <CardHeader>
@@ -126,7 +141,7 @@ export default async function ClientsPage({
               description="Add a client with type “New” to start a 90-day sprint."
             />
           ) : (
-            <NewClientSprintTable clients={newClients} completionByClient={completionByClient} />
+            <NewClientSprintTable clients={newClients} completionByClient={completionByClient} canEdit={isAdmin} />
           )}
         </CardContent>
       </Card>
@@ -145,17 +160,19 @@ export default async function ClientsPage({
         </CardContent>
       </Card>
 
-      <GscConnectionCard status={gscStatus} />
+      {isAdmin && gscStatus && <GscConnectionCard status={gscStatus} />}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Add a client</CardTitle>
-          <CardDescription>Reconcile brand and locations against the master client DB.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ClientForm />
-        </CardContent>
-      </Card>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add a client</CardTitle>
+            <CardDescription>Reconcile brand and locations against the master client DB.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ClientForm />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
