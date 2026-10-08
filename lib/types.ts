@@ -127,6 +127,20 @@ export const SEVERITY_ORDER: Record<IssueSeverity, number> = {
   low: 3,
 };
 
+/** Groupings the Overview page's "Type" filter buckets categories into. */
+export type IssueTypeFilter = "all" | "seo" | "security" | "sprint";
+
+export const SECURITY_ISSUE_CATEGORIES: IssueCategory[] = ["malware", "vulnerability", "outdated_software"];
+export const SPRINT_ISSUE_CATEGORIES: IssueCategory[] = ["sprint_task"];
+export const SEO_ISSUE_CATEGORIES: IssueCategory[] = [
+  "cwv",
+  "broken_link",
+  "page_structure",
+  "indexability",
+  "meta",
+  "local_seo",
+];
+
 export interface ClientRosterRow extends Client {
   lastAuditAt: string | null;
   openIssueCount: number;

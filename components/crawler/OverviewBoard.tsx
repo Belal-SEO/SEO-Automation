@@ -6,31 +6,10 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/crawler/SeverityBadge";
-import { EmptyState } from "@/components/crawler/EmptyState";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 import { syncFixedIssueToReport } from "@/lib/issueReportSync";
-import {
-  ISSUE_CATEGORY_LABELS,
-  SEVERITY_ORDER,
-  type Client,
-  type Issue,
-  type IssueCategory,
-  type IssueSeverity,
-  type IssueStatus,
-} from "@/lib/types";
-
-const SECURITY_CATEGORIES = new Set<IssueCategory>(["malware", "vulnerability", "outdated_software"]);
-const SPRINT_CATEGORIES = new Set<IssueCategory>(["sprint_task"]);
-type IssueType = "all" | "seo" | "security" | "sprint";
-
-function categoryType(category: IssueCategory): IssueType {
-  if (SECURITY_CATEGORIES.has(category)) return "security";
-  if (SPRINT_CATEGORIES.has(category)) return "sprint";
-  return "seo";
-}
-
-const UNASSIGNED = "__unassigned__";
+import { ISSUE_CATEGORY_LABELS, type Client, type Issue, type IssueSeverity, type IssueStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
   { value: "open", label: "Not started" },
@@ -226,124 +205,19 @@ export function OverviewBoard({
   canManagePriority?: boolean;
   canDelete?: boolean;
 }) {
-  const [severity, setSeverity] = useState<IssueSeverity | "all">("all");
-  const [clientId, setClientId] = useState<string>("all");
-  const [status, setStatus] = useState<IssueStatus | "all">("open");
-  const [type, setType] = useState<IssueType>("all");
-  const [assignee, setAssignee] = useState<string>("all");
-
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c.brand])), [clients]);
 
-  const assigneeOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const i of issues) if (i.assignedTo) names.add(i.assignedTo);
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [issues]);
-
-  const filtered = useMemo(() => {
-    return issues
-      .filter((i) => severity === "all" || i.severity === severity)
-      .filter((i) => clientId === "all" || i.clientId === clientId)
-      .filter((i) => status === "all" || i.status === status)
-      .filter((i) => type === "all" || categoryType(i.category) === type)
-      .filter((i) => assignee === "all" || (assignee === UNASSIGNED ? !i.assignedTo : i.assignedTo === assignee))
-      .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-  }, [issues, severity, clientId, status, type, assignee]);
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Priority</span>
-          <select
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value as IssueSeverity | "all")}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            <option value="all">All</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Type</span>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as IssueType)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            <option value="all">All</option>
-            <option value="seo">SEO</option>
-            <option value="security">Security</option>
-            <option value="sprint">Sprint</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Client</span>
-          <select
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            <option value="all">All</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.brand}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Status</span>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as IssueStatus | "all")}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            <option value="all">All</option>
-            <option value="open">Not started</option>
-            <option value="in_progress">In progress</option>
-            <option value="fixed">Completed</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Assignee</span>
-          <select
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            <option value="all">All</option>
-            <option value={UNASSIGNED}>Unassigned</option>
-            {assigneeOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="text-xs text-muted-foreground">
-          {filtered.length} of {issues.length} issues
-        </span>
-      </div>
-
-      {filtered.length === 0 ? (
-        <EmptyState title="No matching issues" description="Try a different filter." />
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((issue) => (
-            <OverviewRow
-              key={issue.id}
-              issue={issue}
-              clientBrand={clientById.get(issue.clientId) ?? "—"}
-              canManagePriority={canManagePriority}
-              canDelete={canDelete}
-            />
-          ))}
-        </div>
-      )}
+    <div className="space-y-3">
+      {issues.map((issue) => (
+        <OverviewRow
+          key={issue.id}
+          issue={issue}
+          clientBrand={clientById.get(issue.clientId) ?? "—"}
+          canManagePriority={canManagePriority}
+          canDelete={canDelete}
+        />
+      ))}
     </div>
   );
 }
