@@ -1,24 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SeverityBadge } from "@/components/crawler/SeverityBadge";
-import { EmptyState } from "@/components/crawler/EmptyState";
-import { CompletedTasksHistory } from "@/components/crawler/CompletedTasksHistory";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 import { syncFixedIssueToReport } from "@/lib/issueReportSync";
-import {
-  ISSUE_CATEGORY_LABELS,
-  SEVERITY_ORDER,
-  type Issue,
-  type IssueCategory,
-  type IssueSeverity,
-  type IssueStatus,
-} from "@/lib/types";
-
-const UNASSIGNED = "__unassigned__";
+import { ISSUE_CATEGORY_LABELS, type Issue, type IssueSeverity, type IssueStatus } from "@/lib/types";
 
 const SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "critical", label: "Critical" },
@@ -238,101 +227,17 @@ export function IssueTable({
   canManageDueDate?: boolean;
   canDelete?: boolean;
 }) {
-  const [category, setCategory] = useState<IssueCategory | "all">("all");
-  const [status, setStatus] = useState<IssueStatus | "all">("all");
-  const [assignee, setAssignee] = useState<string>("all");
-
-  const activeIssues = useMemo(() => issues.filter((i) => i.status !== "fixed"), [issues]);
-  const completedIssues = useMemo(() => issues.filter((i) => i.status === "fixed"), [issues]);
-
-  const assigneeOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const i of activeIssues) if (i.assignedTo) names.add(i.assignedTo);
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [activeIssues]);
-
-  const filtered = useMemo(() => {
-    return activeIssues
-      .filter((i) => category === "all" || i.category === category)
-      .filter((i) => status === "all" || i.status === status)
-      .filter((i) => assignee === "all" || (assignee === UNASSIGNED ? !i.assignedTo : i.assignedTo === assignee))
-      .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-  }, [activeIssues, category, status, assignee]);
-
-  if (issues.length === 0) {
-    return <EmptyState title="No issues found" description="This audit didn't surface any technical issues." />;
-  }
-
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div className="flex flex-wrap gap-3">
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Category</span>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as IssueCategory | "all")}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              <option value="all">All</option>
-              {Object.entries(ISSUE_CATEGORY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Status</span>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as IssueStatus | "all")}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              <option value="all">All</option>
-              <option value="open">Open</option>
-              <option value="in_progress">In progress</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Assignee</span>
-            <select
-              value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              <option value="all">All</option>
-              <option value={UNASSIGNED}>Unassigned</option>
-              {assigneeOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <EmptyState title="No matching issues" description="Try a different filter." />
-      ) : (
-        <ul className="space-y-3">
-          {filtered.map((issue) => (
-            <IssueRow
-              key={issue.id}
-              issue={issue}
-              canManagePriority={canManagePriority}
-              canManageDueDate={canManageDueDate}
-              canDelete={canDelete}
-            />
-          ))}
-        </ul>
-      )}
-
-      <div className="space-y-3 border-t border-border pt-6">
-        <h3 className="text-sm font-semibold">Completed issues</h3>
-        <CompletedTasksHistory tasks={completedIssues} showCategory />
-      </div>
-    </div>
+    <ul className="space-y-3">
+      {issues.map((issue) => (
+        <IssueRow
+          key={issue.id}
+          issue={issue}
+          canManagePriority={canManagePriority}
+          canManageDueDate={canManageDueDate}
+          canDelete={canDelete}
+        />
+      ))}
+    </ul>
   );
 }

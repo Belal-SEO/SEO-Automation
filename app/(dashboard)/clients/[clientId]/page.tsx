@@ -11,6 +11,8 @@ import { AuditTriggerButton } from "@/components/crawler/AuditTriggerButton";
 import { GenerateReportButton } from "@/components/crawler/GenerateReportButton";
 import { CrawlStatusBanner } from "@/components/crawler/CrawlStatusBanner";
 import { IssueTable } from "@/components/crawler/IssueTable";
+import { IssueFilters } from "@/components/crawler/IssueFilters";
+import { CompletedTasksHistory } from "@/components/crawler/CompletedTasksHistory";
 import { CWVTrendChart } from "@/components/crawler/CWVTrendChart";
 import { BeforeAfterGallery } from "@/components/crawler/BeforeAfterGallery";
 import { NotificationSettings } from "@/components/crawler/NotificationSettings";
@@ -21,11 +23,36 @@ import { SprintTasksBoard } from "@/components/crawler/SprintTasksBoard";
 import { BaselineSummaryCard } from "@/components/crawler/BaselineSummaryCard";
 import { ImportReportPanel } from "@/components/crawler/ImportReportPanel";
 import { EmptyState } from "@/components/crawler/EmptyState";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
+import type { Issue } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientDetailPage({ params }: { params: { clientId: string } }) {
+const ISSUES_PAGE_SIZE = 20;
+const UNASSIGNED = "__unassigned__";
+
+function buildIssuesHref(
+  clientId: string,
+  searchParams: Record<string, string | undefined>,
+  overrides: Record<string, string>,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value) params.set(key, value);
+  }
+  for (const [key, value] of Object.entries(overrides)) {
+    params.set(key, value);
+  }
+  return `/clients/${clientId}?${params.toString()}`;
+}
+
+export default async function ClientDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { clientId: string };
+  searchParams: { issuesPage?: string; issuesCategory?: string; issuesStatus?: string; issuesAssignee?: string };
+}) {
   if (!isSupabaseConfigured) redirect("/");
 
   const supabase = createClient();
@@ -67,34 +94,96 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
   );
 
   const auditIds = audits.map((a) => a.id);
-  const [{ data: issueRows }, { data: metricRows }, sprintCompletion, { data: settingsRow }, { data: baselineRow }] =
-    await Promise.all([
-      auditIds.length > 0
-        ? supabase.from("issues").select("*").in("audit_id", auditIds)
-        : Promise.resolve({ data: [] as never[] }),
-      supabase
-        .from("metric_snapshots")
-        .select("*")
-        .eq("client_id", client.id)
-        .order("captured_at", { ascending: true }),
-      isNew ? computeSprintTaskCompletion(supabase, client.id) : Promise.resolve(null),
-      isNew && isAdmin
-        ? supabase.from("monthly_report_settings").select("gsc_site_url").eq("client_id", client.id).maybeSingle()
-        : Promise.resolve({ data: null }),
-      isNew && isAdmin
-        ? supabase.from("baselines").select("*").eq("client_id", client.id).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
 
-  const issues = (issueRows ?? []).map(mapIssue);
+  const issuesPage = Math.max(1, parseInt(searchParams.issuesPage ?? "1", 10) || 1);
+  const issuesCategory = searchParams.issuesCategory ?? "all";
+  const issuesStatus = searchParams.issuesStatus ?? "all";
+  const issuesAssignee = searchParams.issuesAssignee ?? "all";
+
+  const [
+    { data: sprintTaskRows },
+    { data: metricRows },
+    sprintCompletion,
+    { data: settingsRow },
+    { data: baselineRow },
+  ] = await Promise.all([
+    // Manually-added tasks get their own board (below) -- keep them out of the
+    // crawl Issues table (fetched separately, paginated) so they don't show twice.
+    auditIds.length > 0
+      ? supabase.from("issues").select("*").in("audit_id", auditIds).eq("category", "sprint_task")
+      : Promise.resolve({ data: [] as never[] }),
+    supabase
+      .from("metric_snapshots")
+      .select("*")
+      .eq("client_id", client.id)
+      .order("captured_at", { ascending: true }),
+    isNew ? computeSprintTaskCompletion(supabase, client.id) : Promise.resolve(null),
+    isNew && isAdmin
+      ? supabase.from("monthly_report_settings").select("gsc_site_url").eq("client_id", client.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    isNew && isAdmin
+      ? supabase.from("baselines").select("*").eq("client_id", client.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
   const metricSnapshots = (metricRows ?? []).map(mapMetricSnapshot);
   const baseline = baselineRow ? mapBaseline(baselineRow) : null;
-  const fixedIssues = issues.filter((i) => i.status === "fixed");
-  const sprintTasks = issues
-    .filter((i) => i.category === "sprint_task")
+  const sprintTasks = (sprintTaskRows ?? [])
+    .map(mapIssue)
     .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
-  // Manually-added tasks get their own board (below) -- keep them out of the crawl Issues table so they don't show twice.
-  const crawlIssues = issues.filter((i) => i.category !== "sprint_task");
+
+  // Crawl-detected issues (everything except manual sprint tasks) -- paginated
+  // server-side since a client with a lot of WP Remote findings can run into
+  // the hundreds, which was slow to load and filter entirely client-side.
+  let crawlIssues: Issue[] = [];
+  let crawlIssuesTotal = 0;
+  let crawlAssigneeOptions: string[] = [];
+  let completedCrawlIssues: Issue[] = [];
+
+  if (!isNew && auditIds.length > 0) {
+    let activeQuery = supabase
+      .from("issues")
+      .select("*", { count: "exact" })
+      .in("audit_id", auditIds)
+      .neq("category", "sprint_task")
+      .neq("status", "fixed");
+
+    if (issuesCategory !== "all") activeQuery = activeQuery.eq("category", issuesCategory);
+    if (issuesStatus !== "all") activeQuery = activeQuery.eq("status", issuesStatus);
+    if (issuesAssignee === UNASSIGNED) activeQuery = activeQuery.is("assigned_to", null);
+    else if (issuesAssignee !== "all") activeQuery = activeQuery.eq("assigned_to", issuesAssignee);
+
+    const from = (issuesPage - 1) * ISSUES_PAGE_SIZE;
+    const to = from + ISSUES_PAGE_SIZE - 1;
+    const { data: activeRows, count } = await activeQuery.order("detected_at", { ascending: false }).range(from, to);
+    crawlIssues = (activeRows ?? []).map(mapIssue);
+    crawlIssuesTotal = count ?? 0;
+
+    const [{ data: assigneeRows }, { data: completedRows }] = await Promise.all([
+      supabase
+        .from("issues")
+        .select("assigned_to")
+        .in("audit_id", auditIds)
+        .neq("category", "sprint_task")
+        .neq("status", "fixed")
+        .not("assigned_to", "is", null),
+      supabase
+        .from("issues")
+        .select("*")
+        .in("audit_id", auditIds)
+        .neq("category", "sprint_task")
+        .eq("status", "fixed")
+        .order("fixed_at", { ascending: false })
+        .limit(50),
+    ]);
+
+    crawlAssigneeOptions = Array.from(new Set((assigneeRows ?? []).map((r) => r.assigned_to as string))).sort(
+      (a, b) => a.localeCompare(b),
+    );
+    completedCrawlIssues = (completedRows ?? []).map(mapIssue);
+  }
+
+  const crawlIssuesTotalPages = Math.max(1, Math.ceil(crawlIssuesTotal / ISSUES_PAGE_SIZE));
 
   return (
     <div className="space-y-8">
@@ -186,12 +275,56 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
                   description="Connect a crawl source and run the first audit to see issues here."
                 />
               ) : (
-                <IssueTable
-                  issues={crawlIssues}
-                  canManagePriority={isAdmin}
-                  canManageDueDate={isAdmin}
-                  canDelete={isAdmin}
-                />
+                <div className="space-y-3">
+                  <IssueFilters assigneeOptions={crawlAssigneeOptions} totalCount={crawlIssuesTotal} />
+
+                  {crawlIssues.length === 0 ? (
+                    <EmptyState title="No matching issues" description="Try a different filter." />
+                  ) : (
+                    <>
+                      <IssueTable
+                        issues={crawlIssues}
+                        canManagePriority={isAdmin}
+                        canManageDueDate={isAdmin}
+                        canDelete={isAdmin}
+                      />
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <Link
+                          href={buildIssuesHref(client.id, searchParams, {
+                            issuesPage: String(Math.max(1, issuesPage - 1)),
+                          })}
+                          aria-disabled={issuesPage <= 1}
+                          className={cn(
+                            "rounded-md border border-border px-3 py-1.5 text-sm",
+                            issuesPage <= 1 ? "pointer-events-none opacity-50" : "hover:bg-muted",
+                          )}
+                        >
+                          Previous
+                        </Link>
+                        <span className="text-xs text-muted-foreground">
+                          Page {issuesPage} of {crawlIssuesTotalPages}
+                        </span>
+                        <Link
+                          href={buildIssuesHref(client.id, searchParams, {
+                            issuesPage: String(Math.min(crawlIssuesTotalPages, issuesPage + 1)),
+                          })}
+                          aria-disabled={issuesPage >= crawlIssuesTotalPages}
+                          className={cn(
+                            "rounded-md border border-border px-3 py-1.5 text-sm",
+                            issuesPage >= crawlIssuesTotalPages ? "pointer-events-none opacity-50" : "hover:bg-muted",
+                          )}
+                        >
+                          Next
+                        </Link>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="space-y-3 border-t border-border pt-6">
+                    <h3 className="text-sm font-semibold">Completed issues</h3>
+                    <CompletedTasksHistory tasks={completedCrawlIssues} showCategory />
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -217,7 +350,7 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
                 <CardTitle>Before / after</CardTitle>
               </CardHeader>
               <CardContent>
-                <BeforeAfterGallery issues={fixedIssues} />
+                <BeforeAfterGallery issues={completedCrawlIssues} />
               </CardContent>
             </Card>
           )}
