@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/teamAccess";
 
@@ -48,11 +49,21 @@ export async function POST(request: Request) {
   });
 
   if (invokeError) {
-    await supabase
-      .from("audits")
-      .update({ status: "failed", error: invokeError.message })
-      .eq("id", audit.id);
-    return NextResponse.json({ error: invokeError.message }, { status: 502 });
+    // supabase-js's invoke() only gives a generic "non-2xx status code" message by
+    // default -- the run-crawl function's own error detail is in the response body,
+    // which also already wrote it to this audit row before returning. Read it back
+    // from the response so we don't clobber that with the generic message.
+    let message = invokeError.message;
+    if (invokeError instanceof FunctionsHttpError) {
+      try {
+        const body = await invokeError.context.json();
+        if (typeof body?.error === "string") message = body.error;
+      } catch {
+        // Response wasn't JSON -- fall back to the generic invoke message.
+      }
+    }
+    await supabase.from("audits").update({ status: "failed", error: message }).eq("id", audit.id);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   return NextResponse.json({ auditId: audit.id }, { status: 202 });
