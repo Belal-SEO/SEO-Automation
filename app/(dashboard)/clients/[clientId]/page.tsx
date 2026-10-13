@@ -51,7 +51,13 @@ export default async function ClientDetailPage({
   searchParams,
 }: {
   params: { clientId: string };
-  searchParams: { issuesPage?: string; issuesCategory?: string; issuesStatus?: string; issuesAssignee?: string };
+  searchParams: {
+    issuesPage?: string;
+    issuesSeverity?: string;
+    issuesCategory?: string;
+    issuesStatus?: string;
+    issuesAssignee?: string;
+  };
 }) {
   if (!isSupabaseConfigured) redirect("/");
 
@@ -96,6 +102,7 @@ export default async function ClientDetailPage({
   const auditIds = audits.map((a) => a.id);
 
   const issuesPage = Math.max(1, parseInt(searchParams.issuesPage ?? "1", 10) || 1);
+  const issuesSeverity = searchParams.issuesSeverity ?? "all";
   const issuesCategory = searchParams.issuesCategory ?? "all";
   const issuesStatus = searchParams.issuesStatus ?? "all";
   const issuesAssignee = searchParams.issuesAssignee ?? "all";
@@ -148,6 +155,7 @@ export default async function ClientDetailPage({
       .neq("category", "sprint_task")
       .neq("status", "fixed");
 
+    if (issuesSeverity !== "all") activeQuery = activeQuery.eq("severity", issuesSeverity);
     if (issuesCategory !== "all") activeQuery = activeQuery.eq("category", issuesCategory);
     if (issuesStatus !== "all") activeQuery = activeQuery.eq("status", issuesStatus);
     if (issuesAssignee === UNASSIGNED) activeQuery = activeQuery.is("assigned_to", null);

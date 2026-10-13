@@ -203,6 +203,7 @@ export function SprintTasksBoard({
   const [assignedTo, setAssignedTo] = useState("");
   const [creating, setCreating] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [filterSeverity, setFilterSeverity] = useState<IssueSeverity | "all">("all");
 
   const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "fixed"), [tasks]);
   const completedTasks = useMemo(() => tasks.filter((t) => t.status === "fixed"), [tasks]);
@@ -215,11 +216,14 @@ export function SprintTasksBoard({
 
   const filteredTasks = useMemo(
     () =>
-      activeTasks.filter(
-        (t) =>
-          filterAssignee === "all" || (filterAssignee === UNASSIGNED ? !t.assignedTo : t.assignedTo === filterAssignee),
-      ),
-    [activeTasks, filterAssignee],
+      activeTasks
+        .filter(
+          (t) =>
+            filterAssignee === "all" ||
+            (filterAssignee === UNASSIGNED ? !t.assignedTo : t.assignedTo === filterAssignee),
+        )
+        .filter((t) => filterSeverity === "all" || t.severity === filterSeverity),
+    [activeTasks, filterAssignee, filterSeverity],
   );
 
   async function handleCreate(e: React.FormEvent) {
@@ -283,24 +287,41 @@ export function SprintTasksBoard({
         <EmptyState title="No active tasks" description="Add the first sprint task above." />
       ) : (
         <>
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-xs text-muted-foreground">Assignee</span>
-            <select
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              <option value="all">All</option>
-              <option value={UNASSIGNED}>Unassigned</option>
-              {assigneeOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-xs text-muted-foreground">Priority</span>
+              <select
+                value={filterSeverity}
+                onChange={(e) => setFilterSeverity(e.target.value as IssueSeverity | "all")}
+                className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All</option>
+                {SEVERITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-xs text-muted-foreground">Assignee</span>
+              <select
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All</option>
+                <option value={UNASSIGNED}>Unassigned</option>
+                {assigneeOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           {filteredTasks.length === 0 ? (
-            <EmptyState title="No matching tasks" description="Try a different assignee filter." />
+            <EmptyState title="No matching tasks" description="Try a different filter." />
           ) : (
             <div className="space-y-3">
               {filteredTasks.map((task) => (

@@ -22,6 +22,7 @@ export function IssueFilters({ assigneeOptions, totalCount }: { assigneeOptions:
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  const severity = searchParams.get("issuesSeverity") ?? "all";
   const category = searchParams.get("issuesCategory") ?? "all";
   const status = searchParams.get("issuesStatus") ?? "all";
   const assignee = searchParams.get("issuesAssignee") ?? "all";
@@ -29,6 +30,20 @@ export function IssueFilters({ assigneeOptions, totalCount }: { assigneeOptions:
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
       <div className="flex flex-wrap gap-3">
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Priority</span>
+          <select
+            value={severity}
+            onChange={(e) => setParam("issuesSeverity", e.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            <option value="all">All</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Category</span>
           <select
