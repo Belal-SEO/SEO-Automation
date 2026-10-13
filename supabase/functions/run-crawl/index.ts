@@ -1,14 +1,23 @@
 // Supabase Edge Function: run-crawl
 //
-// Triggered by POST /api/crawl ("run now") or the monthly cron. Crawls a
-// handful of same-domain pages itself (plain fetch — no external crawl
-// service or licensed CLI required), extracts a broad set of on-page local
-// SEO signals (structured data, NAP, canonical/meta/OG tags, image alt
-// coverage, internal linking, robots/sitemap coverage), then hands all of
-// it to a model (selectable per run, routed through OpenRouter — see
+// Triggered by POST /api/crawl ("run now") or the monthly cron. Gathers page
+// data for the client's site via one of two crawl sources (selectable per
+// run), extracts a broad set of on-page local SEO signals (structured data,
+// NAP, canonical/meta/OG tags, image alt coverage, internal linking,
+// robots/sitemap coverage) from each page's HTML, then hands all of it to a
+// model (selectable per run, routed through OpenRouter -- see
 // analyzeWithOpenRouter) to identify and categorize issues. PageSpeed
 // Insights stays independent of the crawl since it needs real user /
 // Lighthouse data that no page fetch can produce.
+//
+// Crawl sources:
+//   - "self" (default): self-fetched same-domain BFS crawl (plain fetch, no
+//     external service or licensed CLI required).
+//   - "firecrawl": Firecrawl's hosted crawl API (POST /v1/crawl, poll GET
+//     /v1/crawl/{id}) -- handles JS-rendered pages and anti-bot measures our
+//     own fetcher can't. Requires FIRECRAWL_API_KEY. Field shapes verified
+//     against Firecrawl's own source (apps/api/src/controllers/v1/{crawl,
+//     crawl-status}.ts in mendableai/firecrawl) rather than guessed.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -16,11 +25,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type CrawlSource = "self" | "firecrawl";
+
 interface RunCrawlPayload {
   auditId: string;
   clientId: string;
   domain: string;
   model?: string;
+  crawlSource?: CrawlSource;
 }
 
 interface CrawledPage {
@@ -50,14 +62,15 @@ const MAX_PAGES = 25;
 const CONCURRENCY = 5;
 const FETCH_TIMEOUT_MS = 8000;
 
-async function fetchWithTimeout(url: string): Promise<Response> {
+async function fetchWithTimeout(url: string, timeoutMs = FETCH_TIMEOUT_MS, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
+      ...init,
       signal: controller.signal,
       redirect: "follow",
-      headers: { "User-Agent": "SEOAuditAgent/1.0 (+technical-crawl)" },
+      headers: { "User-Agent": "SEOAuditAgent/1.0 (+technical-crawl)", ...(init?.headers ?? {}) },
     });
   } finally {
     clearTimeout(timeout);
@@ -113,6 +126,43 @@ function extractSchemaTypes(html: string): string[] {
   return Array.from(types);
 }
 
+/** Pure HTML -> CrawledPage extraction, shared by both crawl sources (self-fetch and Firecrawl) so the analysis is identical either way. */
+function analyzePageHtml(
+  url: string,
+  statusCode: number,
+  html: string,
+  responseTimeMs: number,
+  fetchError: string | null,
+): CrawledPage {
+  const images = extractAll(html, /<img\s[^>]*>/gi);
+  const imagesMissingAlt = images.filter((img) => !/\salt=["'][^"']+["']/i.test(img)).length;
+
+  return {
+    url,
+    statusCode,
+    title: extract(html, /<title[^>]*>([^<]*)<\/title>/i),
+    metaDescription: extract(html, /<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)["']/i),
+    h1: extract(html, /<h1[^>]*>(.*?)<\/h1>/is)?.replace(/<[^>]+>/g, "").trim() ?? null,
+    h1Count: (html.match(/<h1[^>]*>/gi) ?? []).length,
+    h2Count: (html.match(/<h2[^>]*>/gi) ?? []).length,
+    wordCount: html
+      ? html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length
+      : 0,
+    noindex: /<meta[^>]+name=["']robots["'][^>]*content=["'][^"']*noindex[^"']*["']/i.test(html),
+    canonicalUrl: extract(html, /<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i),
+    hasViewportMeta: /<meta[^>]+name=["']viewport["']/i.test(html),
+    schemaTypes: extractSchemaTypes(html),
+    ogTitle: extract(html, /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i),
+    ogDescription: extract(html, /<meta[^>]+property=["']og:description["'][^>]*content=["']([^"']*)["']/i),
+    imageCount: images.length,
+    imagesMissingAlt,
+    internalLinkCount: html ? extractSameDomainLinks(html, url).length : 0,
+    phoneNumbers: extractPhoneNumbers(html),
+    responseTimeMs,
+    fetchError,
+  };
+}
+
 async function fetchAndAnalyzePage(url: string): Promise<{ page: CrawledPage; links: string[] }> {
   const startedAt = Date.now();
   try {
@@ -120,62 +170,17 @@ async function fetchAndAnalyzePage(url: string): Promise<{ page: CrawledPage; li
     const responseTimeMs = Date.now() - startedAt;
     const isHtml = res.headers.get("content-type")?.includes("text/html");
     const html = isHtml ? await res.text() : "";
-
-    const images = extractAll(html, /<img\s[^>]*>/gi);
-    const imagesMissingAlt = images.filter(
-      (img) => !/\salt=["'][^"']+["']/i.test(img),
-    ).length;
-
-    const page: CrawledPage = {
-      url,
-      statusCode: res.status,
-      title: extract(html, /<title[^>]*>([^<]*)<\/title>/i),
-      metaDescription: extract(html, /<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)["']/i),
-      h1: extract(html, /<h1[^>]*>(.*?)<\/h1>/is)?.replace(/<[^>]+>/g, "").trim() ?? null,
-      h1Count: (html.match(/<h1[^>]*>/gi) ?? []).length,
-      h2Count: (html.match(/<h2[^>]*>/gi) ?? []).length,
-      wordCount: html
-        ? html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length
-        : 0,
-      noindex: /<meta[^>]+name=["']robots["'][^>]*content=["'][^"']*noindex[^"']*["']/i.test(html),
-      canonicalUrl: extract(html, /<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i),
-      hasViewportMeta: /<meta[^>]+name=["']viewport["']/i.test(html),
-      schemaTypes: extractSchemaTypes(html),
-      ogTitle: extract(html, /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i),
-      ogDescription: extract(html, /<meta[^>]+property=["']og:description["'][^>]*content=["']([^"']*)["']/i),
-      imageCount: images.length,
-      imagesMissingAlt,
-      internalLinkCount: html ? extractSameDomainLinks(html, url).length : 0,
-      phoneNumbers: extractPhoneNumbers(html),
-      responseTimeMs,
-      fetchError: null,
-    };
-
+    const page = analyzePageHtml(url, res.status, html, responseTimeMs, null);
     return { page, links: html ? extractSameDomainLinks(html, url) : [] };
   } catch (err) {
     return {
-      page: {
+      page: analyzePageHtml(
         url,
-        statusCode: 0,
-        title: null,
-        metaDescription: null,
-        h1: null,
-        h1Count: 0,
-        h2Count: 0,
-        wordCount: 0,
-        noindex: false,
-        canonicalUrl: null,
-        hasViewportMeta: false,
-        schemaTypes: [],
-        ogTitle: null,
-        ogDescription: null,
-        imageCount: 0,
-        imagesMissingAlt: 0,
-        internalLinkCount: 0,
-        phoneNumbers: [],
-        responseTimeMs: Date.now() - startedAt,
-        fetchError: err instanceof Error ? err.message : "Unknown fetch error",
-      },
+        0,
+        "",
+        Date.now() - startedAt,
+        err instanceof Error ? err.message : "Unknown fetch error",
+      ),
       links: [],
     };
   }
@@ -205,6 +210,109 @@ async function crawlSite(domain: string): Promise<CrawledPage[]> {
   }
 
   return pages;
+}
+
+const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v1";
+const FIRECRAWL_POLL_INTERVAL_MS = 3000;
+const FIRECRAWL_TIMEOUT_MS = 120000;
+
+interface FirecrawlDocument {
+  rawHtml?: string;
+  links?: string[];
+  metadata: {
+    sourceURL?: string;
+    url?: string;
+    statusCode: number;
+    error?: string;
+  };
+}
+
+/** Starts a Firecrawl crawl job and polls it to completion, verified against Firecrawl's own source (mendableai/firecrawl apps/api/src/controllers/v1/{crawl,crawl-status}.ts) rather than guessed. */
+async function crawlSiteViaFirecrawl(domain: string): Promise<CrawledPage[]> {
+  const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!apiKey) {
+    throw new Error("FIRECRAWL_API_KEY is not configured for this project's Edge Functions.");
+  }
+
+  const rootUrl = domain.endsWith("/") ? domain : `${domain}/`;
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  const startRes = await fetchWithTimeout(`${FIRECRAWL_BASE_URL}/crawl`, FETCH_TIMEOUT_MS, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      url: rootUrl,
+      limit: MAX_PAGES,
+      allowExternalLinks: false,
+      // onlyMainContent: false -- the extraction below needs the full page
+      // (head tags, nav, footer) for canonical/viewport/OG/schema/phone-number
+      // signals, not just Firecrawl's readability-trimmed "main content".
+      scrapeOptions: { formats: ["rawHtml", "links"], onlyMainContent: false },
+    }),
+  });
+
+  if (!startRes.ok) {
+    const raw = await startRes.text().catch(() => "");
+    throw new Error(`Firecrawl crawl request failed (${startRes.status}): ${raw || "no error body"}`);
+  }
+
+  const started = (await startRes.json()) as { success: boolean; id?: string; error?: string };
+  if (!started.success || !started.id) {
+    throw new Error(`Firecrawl didn't start the crawl: ${started.error ?? "no job id returned"}`);
+  }
+
+  const startedAt = Date.now();
+  let nextUrl: string | null = `${FIRECRAWL_BASE_URL}/crawl/${started.id}`;
+  const documents: FirecrawlDocument[] = [];
+
+  while (nextUrl) {
+    if (Date.now() - startedAt > FIRECRAWL_TIMEOUT_MS) {
+      throw new Error(`Firecrawl crawl timed out after ${FIRECRAWL_TIMEOUT_MS / 1000}s.`);
+    }
+
+    const statusRes = await fetchWithTimeout(nextUrl, FETCH_TIMEOUT_MS, { headers });
+    if (!statusRes.ok) {
+      const raw = await statusRes.text().catch(() => "");
+      throw new Error(`Firecrawl status check failed (${statusRes.status}): ${raw || "no error body"}`);
+    }
+
+    const statusBody = (await statusRes.json()) as {
+      success: boolean;
+      status: "scraping" | "completed" | "cancelled" | "failed";
+      next?: string;
+      data: FirecrawlDocument[];
+      error?: string;
+    };
+
+    if (statusBody.status === "failed" || statusBody.status === "cancelled") {
+      throw new Error(`Firecrawl crawl ${statusBody.status}: ${statusBody.error ?? "no error detail given"}`);
+    }
+
+    if (statusBody.status === "completed") {
+      // Only collect `data` once completed -- an in-progress response's `data`
+      // isn't guaranteed to be empty-until-done vs. growing-each-poll, so
+      // collecting on every poll risks counting the same page more than once.
+      documents.push(...(statusBody.data ?? []));
+      nextUrl = statusBody.next ?? null;
+      if (!nextUrl) break;
+      continue;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, FIRECRAWL_POLL_INTERVAL_MS));
+  }
+
+  return documents.map((doc) =>
+    analyzePageHtml(
+      doc.metadata.sourceURL ?? doc.metadata.url ?? rootUrl,
+      doc.metadata.statusCode ?? 0,
+      doc.rawHtml ?? "",
+      0,
+      doc.metadata.error ?? null,
+    ),
+  );
 }
 
 async function fetchSiteWideSignals(domain: string) {
@@ -302,20 +410,34 @@ interface ParsedIssue {
   description: string;
 }
 
+interface ExistingIssueSummary {
+  category: string;
+  url: string;
+  description: string;
+}
+
 async function analyzeWithOpenRouter(
   pages: CrawledPage[],
   siteSignals: Awaited<ReturnType<typeof fetchSiteWideSignals>>,
   client: { name: string; brand: string; domain: string; customAuditInstructions: string | null },
   model: string,
+  existingIssues: ExistingIssueSummary[],
 ): Promise<ParsedIssue[]> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not configured for this project's Edge Functions.");
   }
 
-  const systemPrompt = client.customAuditInstructions
-    ? `${BASE_AUDIT_SYSTEM_PROMPT}\n\nAdditional instructions specific to this client:\n${client.customAuditInstructions}`
-    : BASE_AUDIT_SYSTEM_PROMPT;
+  const dedupeInstructions =
+    existingIssues.length > 0
+      ? `\n\nThese issues are already tracked on this client's task board and open -- do NOT report any of them again, even if worded differently. Only report genuinely new issues not covered by this list:\n${JSON.stringify(existingIssues, null, 2)}`
+      : "";
+
+  const systemPrompt = `${BASE_AUDIT_SYSTEM_PROMPT}${dedupeInstructions}${
+    client.customAuditInstructions
+      ? `\n\nAdditional instructions specific to this client:\n${client.customAuditInstructions}`
+      : ""
+  }`;
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -365,6 +487,16 @@ async function analyzeWithOpenRouter(
   return parsed.issues ?? [];
 }
 
+/** Normalizes a URL for duplicate comparison -- ignores a trailing slash and any query/hash. */
+function normalizeUrlForDedup(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch {
+    return url.trim().replace(/\/$/, "").toLowerCase();
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -385,7 +517,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { auditId, clientId, domain, model: requestedModel } = payload;
+  const { auditId, clientId, domain, model: requestedModel, crawlSource = "self" } = payload;
 
   try {
     const model = requestedModel || Deno.env.get("OPENROUTER_MODEL");
@@ -404,11 +536,27 @@ Deno.serve(async (req) => {
       .single();
     if (!clientRow) throw new Error("Client not found.");
 
-    const [pages, siteSignals] = await Promise.all([crawlSite(domain), fetchSiteWideSignals(domain)]);
+    const [pages, siteSignals, { data: existingIssueRows }] = await Promise.all([
+      crawlSource === "firecrawl" ? crawlSiteViaFirecrawl(domain) : crawlSite(domain),
+      fetchSiteWideSignals(domain),
+      // Issues already open on this client's task board, across any source --
+      // passed to the model as "don't re-report these" context, and used
+      // again below as a hard filter after the model responds.
+      supabase
+        .from("issues")
+        .select("category, url, description")
+        .eq("client_id", clientId)
+        .neq("status", "fixed"),
+    ]);
 
     await supabase.from("audits").update({ status: "analyzing" }).eq("id", auditId);
 
-    const issues = await analyzeWithOpenRouter(
+    const existingIssues: ExistingIssueSummary[] = existingIssueRows ?? [];
+    const existingKeys = new Set(
+      existingIssues.map((i) => `${i.category}|${normalizeUrlForDedup(i.url)}`),
+    );
+
+    const analyzed = await analyzeWithOpenRouter(
       pages,
       siteSignals,
       {
@@ -418,6 +566,14 @@ Deno.serve(async (req) => {
         customAuditInstructions: clientRow.custom_audit_instructions,
       },
       model,
+      existingIssues,
+    );
+
+    // Belt-and-suspenders: even though the prompt tells the model not to
+    // re-report tracked issues, still filter out exact category+page matches
+    // against what's already open, in case the model repeats one anyway.
+    const issues = analyzed.filter(
+      (issue) => !existingKeys.has(`${issue.category}|${normalizeUrlForDedup(issue.url)}`),
     );
 
     if (issues.length > 0) {
@@ -476,9 +632,15 @@ Deno.serve(async (req) => {
 
     await supabase.functions.invoke("alert-check", { body: { auditId, clientId } });
 
-    return new Response(JSON.stringify({ ok: true, pagesCrawled: pages.length, issuesFound: issues.length }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        pagesCrawled: pages.length,
+        issuesFound: issues.length,
+        duplicatesSkipped: analyzed.length - issues.length,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown crawl error.";
     await supabase.from("audits").update({ status: "failed", error: message }).eq("id", auditId);

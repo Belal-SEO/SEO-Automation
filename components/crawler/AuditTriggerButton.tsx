@@ -15,9 +15,15 @@ const MODEL_OPTIONS = [
   { value: CUSTOM, label: "Custom model slug…" },
 ];
 
+const CRAWL_SOURCE_OPTIONS: { value: "self" | "firecrawl"; label: string }[] = [
+  { value: "self", label: "Self-crawl (built in)" },
+  { value: "firecrawl", label: "Firecrawl" },
+];
+
 export function AuditTriggerButton({ clientId }: { clientId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [crawlSource, setCrawlSource] = useState<"self" | "firecrawl">("self");
   const [model, setModel] = useState(MODEL_OPTIONS[0].value);
   const [customModel, setCustomModel] = useState("");
   const [status, setStatus] = useState<"idle" | "starting" | "error">("idle");
@@ -33,7 +39,7 @@ export function AuditTriggerButton({ clientId }: { clientId: string }) {
       const res = await fetch("/api/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, model: resolvedModel }),
+        body: JSON.stringify({ clientId, model: resolvedModel, crawlSource }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -55,6 +61,18 @@ export function AuditTriggerButton({ clientId }: { clientId: string }) {
       </Button>
       {open && (
         <div className="absolute right-0 top-full z-10 mt-2 w-64 space-y-2 rounded-md border border-border bg-background p-3 shadow-md">
+          <label className="text-xs font-medium text-muted-foreground">Crawl source</label>
+          <select
+            value={crawlSource}
+            onChange={(e) => setCrawlSource(e.target.value as "self" | "firecrawl")}
+            className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+          >
+            {CRAWL_SOURCE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
           <label className="text-xs font-medium text-muted-foreground">Model (via OpenRouter)</label>
           <select
             value={model}

@@ -272,7 +272,9 @@ export default async function ClientDetailPage({
               <CardTitle>
                 Issues
                 {latestAudit
-                  ? ` — latest audit (${formatDate(latestAudit.runAt)}${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
+                  ? ` — latest audit (${formatDate(latestAudit.runAt)}${
+                      latestAudit.source === "firecrawl" ? " · Firecrawl" : ""
+                    }${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
                   : ""}
               </CardTitle>
             </CardHeader>

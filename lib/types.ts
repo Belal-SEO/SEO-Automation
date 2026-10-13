@@ -22,7 +22,7 @@ export interface Client {
   updatedAt: string;
 }
 
-export type AuditSource = "ai_crawl" | "psi" | "manual" | "wp_remote";
+export type AuditSource = "ai_crawl" | "firecrawl" | "psi" | "manual" | "wp_remote";
 export type AuditStatus = "queued" | "crawling" | "analyzing" | "complete" | "failed";
 
 export interface Audit {

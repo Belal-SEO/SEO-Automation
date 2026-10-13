@@ -4,7 +4,11 @@ import { FunctionsHttpError } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/teamAccess";
 
-const bodySchema = z.object({ clientId: z.string().uuid(), model: z.string().min(1).optional() });
+const bodySchema = z.object({
+  clientId: z.string().uuid(),
+  model: z.string().min(1).optional(),
+  crawlSource: z.enum(["self", "firecrawl"]).optional(),
+});
 
 /**
  * Triggers a technical crawl for a client. Creates the Audit row and hands
@@ -34,9 +38,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Client not found." }, { status: 404 });
   }
 
+  const crawlSource = parsed.data.crawlSource ?? "self";
+
   const { data: audit, error: auditError } = await supabase
     .from("audits")
-    .insert({ client_id: client.id, source: "ai_crawl", status: "queued" })
+    .insert({ client_id: client.id, source: crawlSource === "firecrawl" ? "firecrawl" : "ai_crawl", status: "queued" })
     .select("id")
     .single();
 
@@ -45,7 +51,7 @@ export async function POST(request: Request) {
   }
 
   const { error: invokeError } = await supabase.functions.invoke("run-crawl", {
-    body: { auditId: audit.id, clientId: client.id, domain: client.domain, model: parsed.data.model },
+    body: { auditId: audit.id, clientId: client.id, domain: client.domain, model: parsed.data.model, crawlSource },
   });
 
   if (invokeError) {
