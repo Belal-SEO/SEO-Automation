@@ -274,3 +274,38 @@ export async function fetchTeamMembers(supabase: SupabaseClient<Database>): Prom
   if (error) throw error;
   return (data ?? []).map(mapTeamMember);
 }
+
+export interface MemberWorkHistoryResult {
+  issues: Issue[];
+  clientBrandById: Record<string, string>;
+  totalCount: number;
+}
+
+/** Paginated, period-filtered completed tasks for a team member -- the "work history" view on the Team page. Matches issues.assigned_to against the member's display name, case-insensitively. */
+export async function fetchMemberWorkHistory(
+  supabase: SupabaseClient<Database>,
+  assignedTo: string,
+  range: { start: Date; end: Date } | null,
+  page: number,
+  pageSize: number,
+): Promise<MemberWorkHistoryResult> {
+  let query = supabase.from("issues").select("*", { count: "exact" }).eq("status", "fixed").ilike("assigned_to", assignedTo);
+  if (range) {
+    query = query.gte("fixed_at", range.start.toISOString()).lt("fixed_at", range.end.toISOString());
+  }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await query.order("fixed_at", { ascending: false }).range(from, to);
+  if (error) throw error;
+
+  const issues = (data ?? []).map(mapIssue);
+  const clientIds = Array.from(new Set(issues.map((i) => i.clientId)));
+  const clientBrandById: Record<string, string> = {};
+  if (clientIds.length > 0) {
+    const { data: clientRows } = await supabase.from("clients").select("id, brand").in("id", clientIds);
+    for (const c of clientRows ?? []) clientBrandById[c.id] = c.brand;
+  }
+
+  return { issues, clientBrandById, totalCount: count ?? 0 };
+}

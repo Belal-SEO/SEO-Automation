@@ -179,3 +179,6 @@ export interface TeamMember {
   displayName: string | null;
   createdAt: string;
 }
+
+/** Date-range buckets for a team member's "work history" view on the Team page. */
+export type WorkHistoryPeriod = "week" | "lastWeek" | "month" | "all";

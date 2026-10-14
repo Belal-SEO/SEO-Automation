@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
+import { buildTeamHref, MemberWorkHistoryPanel, type WorkHistoryData } from "@/components/crawler/MemberWorkHistoryPanel";
 import type { TeamMember, TeamRole } from "@/lib/types";
 
 const ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
@@ -13,16 +15,38 @@ const ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
   { value: "editor", label: "Editor" },
 ];
 
-function MemberRow({ member, isSelf }: { member: TeamMember; isSelf: boolean }) {
+function MemberRow({
+  member,
+  isSelf,
+  searchParams,
+  workHistory,
+}: {
+  member: TeamMember;
+  isSelf: boolean;
+  searchParams: Record<string, string | undefined>;
+  workHistory: WorkHistoryData | null;
+}) {
   const router = useRouter();
   const [role, setRole] = useState<TeamRole>(member.role);
-  const [busy, setBusy] = useState<"role" | "remove" | null>(null);
+  const [displayName, setDisplayName] = useState(member.displayName ?? "");
+  const [busy, setBusy] = useState<"role" | "remove" | "displayName" | null>(null);
+
+  const isHistoryOpen = workHistory?.memberId === member.id;
 
   async function handleRoleChange(newRole: TeamRole) {
     setRole(newRole);
     setBusy("role");
     const supabase = createClient();
     await supabase.from("team_members").update({ role: newRole }).eq("id", member.id);
+    setBusy(null);
+    router.refresh();
+  }
+
+  async function handleDisplayNameBlur() {
+    if (displayName.trim() === (member.displayName ?? "")) return;
+    setBusy("displayName");
+    const supabase = createClient();
+    await supabase.from("team_members").update({ display_name: displayName.trim() || null }).eq("id", member.id);
     setBusy(null);
     router.refresh();
   }
@@ -36,44 +60,81 @@ function MemberRow({ member, isSelf }: { member: TeamMember; isSelf: boolean }) 
   }
 
   return (
-    <li className="flex items-center justify-between gap-3 py-2 text-sm">
-      <div className="min-w-0">
-        <p className="truncate font-medium">
-          {member.email} {isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
-        </p>
-        <p className="text-xs text-muted-foreground">Added {formatDate(member.createdAt)}</p>
+    <li className="space-y-2 py-2 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-medium">
+            {member.email} {isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
+          </p>
+          <p className="text-xs text-muted-foreground">Added {formatDate(member.createdAt)}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            onBlur={handleDisplayNameBlur}
+            disabled={busy !== null}
+            placeholder="Display name"
+            aria-label="Display name"
+            className="h-8 w-32 text-sm"
+          />
+          <select
+            value={role}
+            onChange={(e) => handleRoleChange(e.target.value as TeamRole)}
+            disabled={busy !== null || isSelf}
+            aria-label="Role"
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm capitalize"
+          >
+            {ROLE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleRemove}
+            disabled={busy !== null || isSelf}
+            title={isSelf ? "You can't remove yourself." : undefined}
+          >
+            {busy === "remove" ? "Removing…" : "Remove"}
+          </Button>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <select
-          value={role}
-          onChange={(e) => handleRoleChange(e.target.value as TeamRole)}
-          disabled={busy !== null || isSelf}
-          aria-label="Role"
-          className="h-8 rounded-md border border-border bg-background px-2 text-sm capitalize"
-        >
-          {ROLE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleRemove}
-          disabled={busy !== null || isSelf}
-          title={isSelf ? "You can't remove yourself." : undefined}
-        >
-          {busy === "remove" ? "Removing…" : "Remove"}
-        </Button>
-      </div>
+
+      <Link
+        href={
+          isHistoryOpen
+            ? buildTeamHref(searchParams, { history: null, period: null, page: null })
+            : buildTeamHref(searchParams, { history: member.id, period: "week", page: "1" })
+        }
+        className={cn("inline-block text-xs text-primary hover:underline")}
+      >
+        {isHistoryOpen ? "Hide work history" : "View work history"}
+      </Link>
+
+      {isHistoryOpen && workHistory && (
+        <MemberWorkHistoryPanel member={member} searchParams={searchParams} data={workHistory} />
+      )}
     </li>
   );
 }
 
-export function TeamMembersPanel({ members, currentUserEmail }: { members: TeamMember[]; currentUserEmail: string }) {
+export function TeamMembersPanel({
+  members,
+  currentUserEmail,
+  searchParams,
+  workHistory,
+}: {
+  members: TeamMember[];
+  currentUserEmail: string;
+  searchParams: Record<string, string | undefined>;
+  workHistory: WorkHistoryData | null;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<TeamRole>("editor");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +146,16 @@ export function TeamMembersPanel({ members, currentUserEmail }: { members: TeamM
     setCreating(true);
     setError(null);
     const supabase = createClient();
-    const { error: insertError } = await supabase.from("team_members").insert({ email: trimmed, role });
+    const { error: insertError } = await supabase
+      .from("team_members")
+      .insert({ email: trimmed, role, display_name: displayName.trim() || null });
     setCreating(false);
     if (insertError) {
       setError(insertError.message.includes("duplicate") ? "That email is already on the team." : insertError.message);
       return;
     }
     setEmail("");
+    setDisplayName("");
     setRole("editor");
     router.refresh();
   }
@@ -106,6 +170,15 @@ export function TeamMembersPanel({ members, currentUserEmail }: { members: TeamM
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="name@example.com"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Display name</label>
+          <Input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="e.g. Manny"
+            className="w-32"
           />
         </div>
         <div className="space-y-1">
@@ -127,13 +200,23 @@ export function TeamMembersPanel({ members, currentUserEmail }: { members: TeamM
         </Button>
       </form>
       {error && <p className="text-xs text-destructive">{error}</p>}
+      <p className="text-xs text-muted-foreground">
+        Display name should match the name used in &quot;Assigned to&quot; on tasks, so that member&apos;s work
+        history can be matched up.
+      </p>
 
       {members.length === 0 ? (
         <p className="text-sm text-muted-foreground">No team members yet.</p>
       ) : (
         <ul className="divide-y divide-border">
           {members.map((member) => (
-            <MemberRow key={member.id} member={member} isSelf={member.email.toLowerCase() === currentUserEmail.toLowerCase()} />
+            <MemberRow
+              key={member.id}
+              member={member}
+              isSelf={member.email.toLowerCase() === currentUserEmail.toLowerCase()}
+              searchParams={searchParams}
+              workHistory={workHistory}
+            />
           ))}
         </ul>
       )}
