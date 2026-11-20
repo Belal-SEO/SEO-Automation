@@ -18,6 +18,16 @@
 //     own fetcher can't. Requires FIRECRAWL_API_KEY. Field shapes verified
 //     against Firecrawl's own source (apps/api/src/controllers/v1/{crawl,
 //     crawl-status}.ts in mendableai/firecrawl) rather than guessed.
+//   - "ahrefs": reads findings from an existing Ahrefs Site Audit project
+//     (api.ahrefs.com/v3/site-audit) for the client's domain -- this does NOT
+//     trigger a new Ahrefs crawl, it reads the most recent one, so a Site
+//     Audit project must already exist and be verified for the domain in
+//     Ahrefs. Requires AHREFS_API_KEY. NOTE: docs.ahrefs.com is unreachable
+//     from this sandbox, so the exact response wrapper key names below
+//     ("projects"/"issues"/"pages") are best-effort from indexed doc content,
+//     not verified against the live API or source the way Firecrawl's shapes
+//     were -- extractAhrefsArray() fails loudly with the raw response body if
+//     a key name turns out to be wrong, rather than silently misparsing.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -25,7 +35,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type CrawlSource = "self" | "firecrawl";
+type CrawlSource = "self" | "firecrawl" | "ahrefs";
 
 interface RunCrawlPayload {
   auditId: string;
@@ -315,6 +325,114 @@ async function crawlSiteViaFirecrawl(domain: string): Promise<CrawledPage[]> {
   );
 }
 
+const AHREFS_BASE_URL = "https://api.ahrefs.com/v3/site-audit";
+// "Notice"-level issues are too low-signal to turn into tasks.
+const AHREFS_RELEVANT_IMPORTANCE = new Set(["Error", "Warning"]);
+// Page Explorer has a fixed cost of 50 API units per call, so only the
+// highest-impact issues (by affected page count) get per-page detail --
+// bounds a single run's Ahrefs unit cost regardless of how many issue types
+// come back. Tune up if your plan's unit budget allows more.
+const AHREFS_MAX_ISSUES_WITH_PAGES = 8;
+const AHREFS_PAGES_PER_ISSUE = 5;
+
+interface AhrefsIssueRow {
+  issue_id: number | string;
+  name: string;
+  category: string;
+  importance: string;
+  crawled?: number | null;
+}
+
+interface AhrefsFinding {
+  issueId: number | string;
+  name: string;
+  category: string;
+  importance: string;
+  affectedCount: number;
+  urls: string[];
+}
+
+/** Best-effort unwrap for Ahrefs' resource-keyed response shapes -- see the file-header note on why these key names aren't fully verified. Fails loudly with the raw body rather than silently misparsing. */
+function extractAhrefsArray<T>(body: unknown, key: string): T[] {
+  if (Array.isArray(body)) return body as T[];
+  if (body && typeof body === "object") {
+    const record = body as Record<string, unknown>;
+    if (Array.isArray(record[key])) return record[key] as T[];
+    if (Array.isArray(record.data)) return record.data as T[];
+  }
+  throw new Error(
+    `Unexpected Ahrefs response shape (expected a "${key}" array): ${JSON.stringify(body).slice(0, 500)}`,
+  );
+}
+
+async function ahrefsRequest(path: string, params: Record<string, string>, apiKey: string): Promise<unknown> {
+  const url = `${AHREFS_BASE_URL}${path}?${new URLSearchParams(params)}`;
+  const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS, { headers: { Authorization: `Bearer ${apiKey}` } });
+  if (!res.ok) {
+    const raw = await res.text().catch(() => "");
+    throw new Error(`Ahrefs request to ${path} failed (${res.status}): ${raw || "no error body"}`);
+  }
+  return res.json();
+}
+
+/** Resolves the client's Ahrefs Site Audit project by domain, fetches its current issues, and pulls a sample of affected URLs for the highest-impact ones. */
+async function fetchAhrefsFindings(domain: string): Promise<AhrefsFinding[]> {
+  const apiKey = Deno.env.get("AHREFS_API_KEY");
+  if (!apiKey) {
+    throw new Error("AHREFS_API_KEY is not configured for this project's Edge Functions.");
+  }
+
+  const projectsBody = await ahrefsRequest("/projects", { project_url: domain }, apiKey);
+  const projects = extractAhrefsArray<{ project_id: string | number }>(projectsBody, "projects");
+  const projectId = projects[0]?.project_id;
+  if (!projectId) {
+    throw new Error(
+      `No Ahrefs Site Audit project found for ${domain}. Create and verify ownership of a Site Audit project for this domain in Ahrefs first.`,
+    );
+  }
+
+  const issuesBody = await ahrefsRequest("/issues", { project_id: String(projectId) }, apiKey);
+  const issueRows = extractAhrefsArray<AhrefsIssueRow>(issuesBody, "issues");
+
+  const relevant = issueRows
+    .filter((row) => AHREFS_RELEVANT_IMPORTANCE.has(row.importance) && (row.crawled ?? 0) > 0)
+    .sort((a, b) => (b.crawled ?? 0) - (a.crawled ?? 0));
+
+  const withPages = relevant.slice(0, AHREFS_MAX_ISSUES_WITH_PAGES);
+  const withoutPages = relevant.slice(AHREFS_MAX_ISSUES_WITH_PAGES);
+
+  const withPagesFindings = await Promise.all(
+    withPages.map(async (row): Promise<AhrefsFinding> => {
+      const where = JSON.stringify({ field: "issue_id", is: ["eq", row.issue_id] });
+      const pagesBody = await ahrefsRequest(
+        "/page-explorer",
+        { project_id: String(projectId), where, select: "url", limit: String(AHREFS_PAGES_PER_ISSUE) },
+        apiKey,
+      );
+      const pageRows = extractAhrefsArray<{ url: string }>(pagesBody, "pages");
+      return {
+        issueId: row.issue_id,
+        name: row.name,
+        category: row.category,
+        importance: row.importance,
+        affectedCount: row.crawled ?? 0,
+        urls: pageRows.map((p) => p.url),
+      };
+    }),
+  );
+
+  const withoutPagesFindings: AhrefsFinding[] = withoutPages.map((row) => ({
+    issueId: row.issue_id,
+    name: row.name,
+    category: row.category,
+    importance: row.importance,
+    affectedCount: row.crawled ?? 0,
+    urls: [],
+  }));
+
+  return [...withPagesFindings, ...withoutPagesFindings];
+}
+
 async function fetchSiteWideSignals(domain: string) {
   const base = domain.endsWith("/") ? domain.slice(0, -1) : domain;
 
@@ -416,28 +534,18 @@ interface ExistingIssueSummary {
   description: string;
 }
 
-async function analyzeWithOpenRouter(
-  pages: CrawledPage[],
-  siteSignals: Awaited<ReturnType<typeof fetchSiteWideSignals>>,
-  client: { name: string; brand: string; domain: string; customAuditInstructions: string | null },
-  model: string,
-  existingIssues: ExistingIssueSummary[],
-): Promise<ParsedIssue[]> {
+function buildDedupeInstructions(existingIssues: ExistingIssueSummary[]): string {
+  return existingIssues.length > 0
+    ? `\n\nThese issues are already tracked on this client's task board and open -- do NOT report any of them again, even if worded differently. Only report genuinely new issues not covered by this list:\n${JSON.stringify(existingIssues, null, 2)}`
+    : "";
+}
+
+/** Calls the model with the report_issues tool forced, and parses its structured response. Shared by both the crawl-based and Ahrefs-findings-based analysis paths -- only the prompt and input data differ between them. */
+async function callOpenRouterForIssues(systemPrompt: string, userContent: string, model: string): Promise<ParsedIssue[]> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not configured for this project's Edge Functions.");
   }
-
-  const dedupeInstructions =
-    existingIssues.length > 0
-      ? `\n\nThese issues are already tracked on this client's task board and open -- do NOT report any of them again, even if worded differently. Only report genuinely new issues not covered by this list:\n${JSON.stringify(existingIssues, null, 2)}`
-      : "";
-
-  const systemPrompt = `${BASE_AUDIT_SYSTEM_PROMPT}${dedupeInstructions}${
-    client.customAuditInstructions
-      ? `\n\nAdditional instructions specific to this client:\n${client.customAuditInstructions}`
-      : ""
-  }`;
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -451,14 +559,7 @@ async function analyzeWithOpenRouter(
       max_tokens: 8000,
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Client: ${client.name} (${client.brand}), ${client.domain}\n\nSite-wide signals:\n${JSON.stringify(
-            siteSignals,
-            null,
-            2,
-          )}\n\nCrawled page data (${pages.length} pages):\n\n${JSON.stringify(pages, null, 2)}`,
-        },
+        { role: "user", content: userContent },
       ],
       tools: [ISSUES_TOOL],
       tool_choice: { type: "function", function: { name: "report_issues" } },
@@ -485,6 +586,68 @@ async function analyzeWithOpenRouter(
     throw new Error("The model's response wasn't valid JSON.");
   }
   return parsed.issues ?? [];
+}
+
+async function analyzeWithOpenRouter(
+  pages: CrawledPage[],
+  siteSignals: Awaited<ReturnType<typeof fetchSiteWideSignals>>,
+  client: { name: string; brand: string; domain: string; customAuditInstructions: string | null },
+  model: string,
+  existingIssues: ExistingIssueSummary[],
+): Promise<ParsedIssue[]> {
+  const systemPrompt = `${BASE_AUDIT_SYSTEM_PROMPT}${buildDedupeInstructions(existingIssues)}${
+    client.customAuditInstructions
+      ? `\n\nAdditional instructions specific to this client:\n${client.customAuditInstructions}`
+      : ""
+  }`;
+  const userContent = `Client: ${client.name} (${client.brand}), ${client.domain}\n\nSite-wide signals:\n${JSON.stringify(
+    siteSignals,
+    null,
+    2,
+  )}\n\nCrawled page data (${pages.length} pages):\n\n${JSON.stringify(pages, null, 2)}`;
+
+  return callOpenRouterForIssues(systemPrompt, userContent, model);
+}
+
+const AHREFS_AUDIT_SYSTEM_PROMPT = `You are a senior technical SEO auditor reviewing findings pulled from an Ahrefs
+Site Audit crawl of a client's website. Ground every issue strictly in the findings provided -- never invent a page,
+URL, or fact not present in the input.
+
+Each finding has: an Ahrefs issue name, an Ahrefs category, an importance level (Error or Warning), how many pages
+are affected (affectedCount), and (when available) a sample of specific affected page URLs (urls).
+
+For a finding WITH urls listed: report one issue per URL in that list (use that exact URL).
+For a finding with an EMPTY urls list (page sampling was skipped for this one to control API cost since it wasn't
+among the highest-impact findings): report one sitewide issue using the client's domain as the URL, and mention the
+total affectedCount in the description.
+
+Categorize each issue into exactly one of: cwv, broken_link, page_structure, indexability, meta, local_seo. Use this
+mapping from Ahrefs' own categories as a guide, adjusting based on the specific issue name when a category could
+plausibly fit more than one bucket:
+- Indexability, Redirects, Sitemaps -> indexability
+- Links, External pages -> broken_link
+- Content, Duplicates, Localization, Social tags, AI Discoverability -> meta
+- Internal pages, Images, JavaScript, CSS, Usability and performance, Other -> page_structure
+- Anything clearly about page load speed or Core Web Vitals -> cwv
+
+Assign severity by real-world impact: critical for a sitewide indexability/redirect failure or an issue affecting
+most of the site's pages; high for an "Error"-importance issue affecting a meaningful share of pages; medium for a
+"Warning"-importance issue or an "Error" affecting only a handful of pages; low for anything narrower or cosmetic.`;
+
+async function analyzeAhrefsFindings(
+  findings: AhrefsFinding[],
+  client: { name: string; brand: string; domain: string; customAuditInstructions: string | null },
+  model: string,
+  existingIssues: ExistingIssueSummary[],
+): Promise<ParsedIssue[]> {
+  const systemPrompt = `${AHREFS_AUDIT_SYSTEM_PROMPT}${buildDedupeInstructions(existingIssues)}${
+    client.customAuditInstructions
+      ? `\n\nAdditional instructions specific to this client:\n${client.customAuditInstructions}`
+      : ""
+  }`;
+  const userContent = `Client: ${client.name} (${client.brand}), ${client.domain}\n\nAhrefs Site Audit findings (${findings.length}):\n\n${JSON.stringify(findings, null, 2)}`;
+
+  return callOpenRouterForIssues(systemPrompt, userContent, model);
 }
 
 /** Normalizes a URL for duplicate comparison -- ignores a trailing slash and any query/hash. */
@@ -536,38 +699,50 @@ Deno.serve(async (req) => {
       .single();
     if (!clientRow) throw new Error("Client not found.");
 
-    const [pages, siteSignals, { data: existingIssueRows }] = await Promise.all([
-      crawlSource === "firecrawl" ? crawlSiteViaFirecrawl(domain) : crawlSite(domain),
-      fetchSiteWideSignals(domain),
-      // Issues already open on this client's task board, across any source --
-      // passed to the model as "don't re-report these" context, and used
-      // again below as a hard filter after the model responds.
-      supabase
-        .from("issues")
-        .select("category, url, description")
-        .eq("client_id", clientId)
-        .neq("status", "fixed"),
-    ]);
+    const client = {
+      name: clientRow.name,
+      brand: clientRow.brand,
+      domain: clientRow.domain,
+      customAuditInstructions: clientRow.custom_audit_instructions,
+    };
 
-    await supabase.from("audits").update({ status: "analyzing" }).eq("id", auditId);
+    // Issues already open on this client's task board, across any source --
+    // passed to the model as "don't re-report these" context, and used
+    // again below as a hard filter after the model responds.
+    const existingIssuesQuery = supabase
+      .from("issues")
+      .select("category, url, description")
+      .eq("client_id", clientId)
+      .neq("status", "fixed");
 
-    const existingIssues: ExistingIssueSummary[] = existingIssueRows ?? [];
-    const existingKeys = new Set(
-      existingIssues.map((i) => `${i.category}|${normalizeUrlForDedup(i.url)}`),
-    );
+    let analyzed: ParsedIssue[];
+    let resultMeta: Record<string, number>;
+    let existingIssues: ExistingIssueSummary[];
 
-    const analyzed = await analyzeWithOpenRouter(
-      pages,
-      siteSignals,
-      {
-        name: clientRow.name,
-        brand: clientRow.brand,
-        domain: clientRow.domain,
-        customAuditInstructions: clientRow.custom_audit_instructions,
-      },
-      model,
-      existingIssues,
-    );
+    if (crawlSource === "ahrefs") {
+      const [findings, { data: existingIssueRows }] = await Promise.all([
+        fetchAhrefsFindings(domain),
+        existingIssuesQuery,
+      ]);
+      await supabase.from("audits").update({ status: "analyzing" }).eq("id", auditId);
+
+      existingIssues = existingIssueRows ?? [];
+      analyzed = findings.length > 0 ? await analyzeAhrefsFindings(findings, client, model, existingIssues) : [];
+      resultMeta = { ahrefsFindingsProcessed: findings.length };
+    } else {
+      const [pages, siteSignals, { data: existingIssueRows }] = await Promise.all([
+        crawlSource === "firecrawl" ? crawlSiteViaFirecrawl(domain) : crawlSite(domain),
+        fetchSiteWideSignals(domain),
+        existingIssuesQuery,
+      ]);
+      await supabase.from("audits").update({ status: "analyzing" }).eq("id", auditId);
+
+      existingIssues = existingIssueRows ?? [];
+      analyzed = await analyzeWithOpenRouter(pages, siteSignals, client, model, existingIssues);
+      resultMeta = { pagesCrawled: pages.length };
+    }
+
+    const existingKeys = new Set(existingIssues.map((i) => `${i.category}|${normalizeUrlForDedup(i.url)}`));
 
     // Belt-and-suspenders: even though the prompt tells the model not to
     // re-report tracked issues, still filter out exact category+page matches
@@ -635,7 +810,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         ok: true,
-        pagesCrawled: pages.length,
+        ...resultMeta,
         issuesFound: issues.length,
         duplicatesSkipped: analyzed.length - issues.length,
       }),

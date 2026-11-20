@@ -15,15 +15,18 @@ const MODEL_OPTIONS = [
   { value: CUSTOM, label: "Custom model slug…" },
 ];
 
-const CRAWL_SOURCE_OPTIONS: { value: "self" | "firecrawl"; label: string }[] = [
+type CrawlSource = "self" | "firecrawl" | "ahrefs";
+
+const CRAWL_SOURCE_OPTIONS: { value: CrawlSource; label: string }[] = [
   { value: "self", label: "Self-crawl (built in)" },
   { value: "firecrawl", label: "Firecrawl" },
+  { value: "ahrefs", label: "Ahrefs Site Audit" },
 ];
 
 export function AuditTriggerButton({ clientId }: { clientId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [crawlSource, setCrawlSource] = useState<"self" | "firecrawl">("self");
+  const [crawlSource, setCrawlSource] = useState<CrawlSource>("self");
   const [model, setModel] = useState(MODEL_OPTIONS[0].value);
   const [customModel, setCustomModel] = useState("");
   const [status, setStatus] = useState<"idle" | "starting" | "error">("idle");
@@ -64,7 +67,7 @@ export function AuditTriggerButton({ clientId }: { clientId: string }) {
           <label className="text-xs font-medium text-muted-foreground">Crawl source</label>
           <select
             value={crawlSource}
-            onChange={(e) => setCrawlSource(e.target.value as "self" | "firecrawl")}
+            onChange={(e) => setCrawlSource(e.target.value as CrawlSource)}
             className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
           >
             {CRAWL_SOURCE_OPTIONS.map((opt) => (

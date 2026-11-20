@@ -274,7 +274,9 @@ export default async function ClientDetailPage({
                 {latestAudit
                   ? ` — latest audit (${formatDate(latestAudit.runAt)}${
                       latestAudit.source === "firecrawl" ? " · Firecrawl" : ""
-                    }${latestAudit.model ? ` · ${latestAudit.model}` : ""})`
+                    }${latestAudit.source === "ahrefs" ? " · Ahrefs" : ""}${
+                      latestAudit.model ? ` · ${latestAudit.model}` : ""
+                    })`
                   : ""}
               </CardTitle>
             </CardHeader>

@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/teamAccess";
 const bodySchema = z.object({
   clientId: z.string().uuid(),
   model: z.string().min(1).optional(),
-  crawlSource: z.enum(["self", "firecrawl"]).optional(),
+  crawlSource: z.enum(["self", "firecrawl", "ahrefs"]).optional(),
 });
 
 /**
@@ -40,9 +40,11 @@ export async function POST(request: Request) {
 
   const crawlSource = parsed.data.crawlSource ?? "self";
 
+  const auditSource = crawlSource === "firecrawl" || crawlSource === "ahrefs" ? crawlSource : "ai_crawl";
+
   const { data: audit, error: auditError } = await supabase
     .from("audits")
-    .insert({ client_id: client.id, source: crawlSource === "firecrawl" ? "firecrawl" : "ai_crawl", status: "queued" })
+    .insert({ client_id: client.id, source: auditSource, status: "queued" })
     .select("id")
     .single();
 
