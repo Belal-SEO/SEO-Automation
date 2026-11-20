@@ -367,7 +367,9 @@ function extractAhrefsArray<T>(body: unknown, key: string): T[] {
 
 async function ahrefsRequest(path: string, params: Record<string, string>, apiKey: string): Promise<unknown> {
   const url = `${AHREFS_BASE_URL}${path}?${new URLSearchParams(params)}`;
-  const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS, { headers: { Authorization: `Bearer ${apiKey}` } });
+  const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS, {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+  });
   if (!res.ok) {
     const raw = await res.text().catch(() => "");
     throw new Error(`Ahrefs request to ${path} failed (${res.status}): ${raw || "no error body"}`);
